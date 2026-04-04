@@ -1,0 +1,271 @@
+- generic [ref=e3]:
+  - complementary [ref=e4]:
+    - generic [ref=e5]:
+      - button "Sora Nexus direct venue SoraSwap" [ref=e6] [cursor=pointer]:
+        - generic [ref=e8]:
+          - generic [ref=e9]: Sora Nexus direct venue
+          - strong [ref=e10]: SoraSwap
+      - generic [ref=e11]:
+        - generic [ref=e12]: Active venue
+        - strong [ref=e13]: Crosschain
+        - paragraph [ref=e14]: taira.sora.org
+      - generic [ref=e15]:
+        - button "Connect" [ref=e16] [cursor=pointer]:
+          - generic:
+            - img
+          - img [ref=e17]
+          - text: Connect
+        - generic [ref=e20]:
+          - button "Refresh runtime" [ref=e21] [cursor=pointer]:
+            - img [ref=e22]
+          - button "Light mode" [ref=e27] [cursor=pointer]:
+            - img [ref=e28]
+    - generic [ref=e34]:
+      - generic [ref=e35]: Workspace
+      - navigation "Primary" [ref=e36]:
+        - button "Swap" [ref=e37] [cursor=pointer]:
+          - img [ref=e39]
+          - generic [ref=e42]: Swap
+        - button "Launchpad" [ref=e43] [cursor=pointer]:
+          - img [ref=e45]
+          - generic [ref=e50]: Launchpad
+        - button "DeFi" [ref=e51] [cursor=pointer]:
+          - img [ref=e53]
+          - generic [ref=e55]: DeFi
+        - button "Wallet" [ref=e56] [cursor=pointer]:
+          - img [ref=e58]
+          - generic [ref=e61]: Wallet
+        - button "Crosschain" [ref=e62] [cursor=pointer]:
+          - generic:
+            - img
+          - img [ref=e64]
+          - generic [ref=e71]: Crosschain
+        - button "More" [ref=e72] [cursor=pointer]:
+          - img [ref=e74]
+          - generic [ref=e77]: More
+    - generic [ref=e78]:
+      - generic [ref=e79]: Runtime
+      - generic "Runtime status" [ref=e80]:
+        - generic [ref=e81]:
+          - generic [ref=e82]: View
+          - strong [ref=e83]: Crosschain
+        - generic [ref=e84]:
+          - generic [ref=e85]: Endpoint
+          - strong [ref=e86]: taira.sora.org
+        - generic [ref=e87]:
+          - generic [ref=e88]: Contracts
+          - strong [ref=e89]: "0"
+        - generic [ref=e90]:
+          - generic [ref=e91]: Connect
+          - strong [ref=e92]: Offline
+        - generic [ref=e93]:
+          - generic [ref=e94]: API
+          - strong [ref=e95]: n/a
+        - generic [ref=e96]:
+          - generic [ref=e97]: Registry
+          - strong [ref=e98]: testnet
+        - generic [ref=e99]:
+          - generic [ref=e100]: Runtime
+          - strong [ref=e101]:
+            - status "Loading" [ref=e102]
+            - text: Polling
+  - main [ref=e106]:
+    - main [ref=e109]:
+      - generic [ref=e111]:
+        - generic [ref=e112]:
+          - paragraph [ref=e113]: Crosschain
+          - heading "Transfer tracker" [level=2] [ref=e114]
+          - paragraph [ref=e115]: Start from route, token, amount, and recipient. The page derives the canonical lookup key, pulls live SCCP bundles from Torii, compares finality, and can submit the Sora-side proof path when a bundle is ready.
+          - generic [ref=e116]:
+            - article [ref=e117]:
+              - generic [ref=e118]: Route
+              - strong [ref=e119]: Sora -> Ethereum
+            - article [ref=e120]:
+              - generic [ref=e121]: Sora account
+              - strong [ref=e122]: "--"
+            - article [ref=e123]:
+              - generic [ref=e124]: Tracker
+              - strong [ref=e125]: Enter the transfer route to derive the canonical lookup key
+            - article [ref=e126]:
+              - generic [ref=e127]: Recent lookups
+              - strong [ref=e128]: "0"
+          - button "Open wallet and account setup" [ref=e130] [cursor=pointer]:
+            - generic:
+              - img
+            - text: Open wallet and account setup
+        - generic [ref=e131]:
+          - generic [ref=e132]:
+            - paragraph [ref=e133]: Route planner
+            - generic [ref=e135]:
+              - heading "Start with the transfer route" [level=3] [ref=e136]
+              - paragraph [ref=e137]: Fill the burn route first. The tracker derives the canonical burn message id that Torii uses for proof lookup, then you can fetch the live bundle in one step.
+            - generic [ref=e138]:
+              - generic [ref=e139]:
+                - generic [ref=e140]: Source domain
+                - combobox "Source domain" [ref=e141]:
+                  - option "Sora" [selected]
+                  - option "Ethereum"
+                  - option "BNB Smart Chain"
+                  - option "Solana"
+                  - option "TON"
+                  - option "TRON"
+                  - option "Sora / Kusama"
+                  - option "Sora / Polkadot"
+              - generic [ref=e142]:
+                - generic [ref=e143]: Destination domain
+                - combobox "Destination domain" [ref=e144]:
+                  - option "Sora"
+                  - option "Ethereum" [selected]
+                  - option "BNB Smart Chain"
+                  - option "Solana"
+                  - option "TON"
+                  - option "TRON"
+                  - option "Sora / Kusama"
+                  - option "Sora / Polkadot"
+              - generic [ref=e145]:
+                - generic [ref=e146]: Nonce
+                - textbox "Nonce" [ref=e147]:
+                  - /placeholder: "7"
+              - generic [ref=e148]:
+                - generic [ref=e149]: Amount
+                - textbox "Amount" [ref=e150]:
+                  - /placeholder: "42"
+              - generic [ref=e151]:
+                - generic [ref=e152]: Sora asset id hex32
+                - textbox "Sora asset id hex32" [ref=e153]:
+                  - /placeholder: 0x...
+              - generic [ref=e154]:
+                - generic [ref=e155]: Recipient hex32
+                - textbox "Recipient hex32" [ref=e156]:
+                  - /placeholder: 0x...
+            - generic [ref=e157]:
+              - paragraph [ref=e158]: Canonical lookup key
+              - paragraph [ref=e159]: Enter nonce, asset id, amount, and recipient to derive a canonical burn message id.
+            - generic [ref=e160]:
+              - generic [ref=e161]:
+                - generic [ref=e162]: Route
+                - strong [ref=e163]: Sora -> Ethereum
+              - generic [ref=e164]:
+                - generic [ref=e165]: Destination wallet
+                - strong [ref=e166]: Manual entry
+              - generic [ref=e167]:
+                - generic [ref=e168]: Status
+                - strong [ref=e169]: Enter the transfer route to derive the canonical lookup key
+              - generic [ref=e170]:
+                - generic [ref=e171]: What this key does
+                - strong [ref=e172]: Direct Torii proof lookup for burn transfers
+              - generic [ref=e173]:
+                - generic [ref=e174]: Sora endpoint
+                - strong [ref=e175]: https://taira.sora.org
+            - generic [ref=e176]:
+              - paragraph [ref=e177]: Linked destination wallets
+              - generic [ref=e179]:
+                - heading "Reuse the remote recipient by route" [level=3] [ref=e180]
+                - paragraph [ref=e181]: Save the destination wallet once for each remote domain and the tracker can start from a known route target instead of a pasted hex32 every time.
+              - paragraph [ref=e182]: No saved destination wallet for Ethereum yet.
+              - generic [ref=e184]:
+                - generic [ref=e185]: Destination label
+                - textbox "Destination label" [ref=e186]:
+                  - /placeholder: Main Ethereum wallet
+              - button "Save destination wallet" [disabled] [ref=e188]
+            - generic [ref=e189]:
+              - button "Track derived transfer" [disabled] [ref=e190]:
+                - generic:
+                  - img
+                - text: Track derived transfer
+              - button "Use derived message id" [disabled] [ref=e191]
+          - generic [ref=e192]:
+            - paragraph [ref=e193]: Transfer evidence
+            - generic [ref=e194]:
+              - generic [ref=e195]:
+                - heading "Fetch a live SCCP bundle" [level=3] [ref=e196]
+                - paragraph [ref=e197]: Use the derived burn key above or paste any canonical message id to inspect the current bridge evidence directly from Torii.
+              - generic [ref=e198]:
+                - button "Burn" [ref=e199] [cursor=pointer]:
+                  - generic:
+                    - img
+                  - text: Burn
+                - button "Governance" [ref=e200] [cursor=pointer]
+            - generic [ref=e201]:
+              - generic [ref=e202]: Burn proof message id
+              - textbox "0x..." [ref=e203]
+            - button "Fetch Burn proof" [ref=e205] [cursor=pointer]:
+              - generic:
+                - img
+              - text: Fetch Burn proof
+        - generic [ref=e206]:
+          - paragraph [ref=e207]: Block finality
+          - generic [ref=e208]:
+            - generic [ref=e209]:
+              - heading "Inspect bridge finality for a block height" [level=3] [ref=e210]
+              - paragraph [ref=e211]: Pull the self-contained proof and the commitment bundle together, then compare their SCCP root against the active proof bundle when both are loaded.
+            - generic [ref=e212]:
+              - textbox "1" [ref=e213]
+              - button "Fetch finality" [ref=e214] [cursor=pointer]:
+                - generic:
+                  - img
+                - text: Fetch finality
+        - generic [ref=e215]:
+          - generic [ref=e216]:
+            - paragraph [ref=e217]: Recent lookups
+            - heading "Jump back into a transfer or block" [level=3] [ref=e218]
+            - paragraph [ref=e219]: Proof and finality lookups you complete here stay on this device so you can jump back into them quickly.
+          - generic [ref=e220]:
+            - paragraph [ref=e221]: Connector policy
+            - heading "Protocol connectors still define the real bridge path" [level=3] [ref=e222]
+            - paragraph [ref=e223]: Browser plugins are optional acceleration paths, not the product model. This page keeps route destinations on-device today while the actual protocol connector layer catches up.
+            - generic [ref=e224]:
+              - article [ref=e225]:
+                - generic [ref=e226]:
+                  - generic [ref=e227]: Ethereum / EVM
+                  - generic [ref=e228]: Protocol-first
+                - generic [ref=e229]:
+                  - strong [ref=e230]: WalletConnect first
+                  - generic [ref=e231]: Injected EIP-1193 only when present
+              - article [ref=e232]:
+                - generic [ref=e233]:
+                  - generic [ref=e234]: TON
+                  - generic [ref=e235]: Protocol-native
+                - generic [ref=e236]:
+                  - strong [ref=e237]: TON Connect
+                  - generic [ref=e238]: Deep link handoff
+              - article [ref=e239]:
+                - generic [ref=e240]:
+                  - generic [ref=e241]: TRON
+                  - generic [ref=e242]: Protocol-first
+                - generic [ref=e243]:
+                  - strong [ref=e244]: WalletConnect TRON
+                  - generic [ref=e245]: TronLink when present
+              - article [ref=e246]:
+                - generic [ref=e247]:
+                  - generic [ref=e248]: Solana
+                  - generic [ref=e249]: Browser support varies
+                - generic [ref=e250]:
+                  - strong [ref=e251]: Wallet Standard
+                  - generic [ref=e252]: External handoff
+              - article [ref=e253]:
+                - generic [ref=e254]:
+                  - generic [ref=e255]: Polkadot / Kusama
+                  - generic [ref=e256]: No plugin-only path
+                - generic [ref=e257]:
+                  - strong [ref=e258]: Extension interface
+                  - generic [ref=e259]: External handoff
+        - generic [ref=e260]:
+          - generic [ref=e261]:
+            - paragraph [ref=e262]: Execution inspector
+            - heading "Bridge inspector" [level=3] [ref=e263]
+            - paragraph [ref=e264]: Raw proof, finality, and submit payloads stay visible here while the main workspace stays focused on route planning and proof checks.
+          - generic [ref=e265]:
+            - generic [ref=e266]:
+              - generic [ref=e267]: Sora account
+              - strong [ref=e268]: "--"
+            - generic [ref=e269]:
+              - generic [ref=e270]: Wallet session
+              - strong [ref=e271]: Needed
+            - generic [ref=e272]:
+              - generic [ref=e273]: Route
+              - strong [ref=e274]: Sora -> Ethereum
+            - generic [ref=e275]:
+              - generic [ref=e276]: Tracker
+              - strong [ref=e277]: Enter the transfer route to derive the canonical lookup key
+          - generic [ref=e278]: Track a transfer or fetch finality and the bridge payload stream will appear here.

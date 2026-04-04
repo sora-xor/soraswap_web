@@ -1,0 +1,104 @@
+- generic [ref=e3]:
+  - complementary [ref=e4]:
+    - generic [ref=e5]:
+      - button "Sora Nexus direct venue SoraSwap" [ref=e6] [cursor=pointer]:
+        - generic [ref=e8]:
+          - generic [ref=e9]: Sora Nexus direct venue
+          - strong [ref=e10]: SoraSwap
+      - generic [ref=e11]:
+        - generic [ref=e12]: Active venue
+        - strong [ref=e13]: Launchpad
+        - paragraph [ref=e14]: taira.sora.org
+      - generic [ref=e15]:
+        - button "Connect" [ref=e16] [cursor=pointer]:
+          - generic:
+            - img
+          - img [ref=e17]
+          - text: Connect
+        - generic [ref=e20]:
+          - button "Refresh runtime" [ref=e21] [cursor=pointer]:
+            - img [ref=e22]
+          - button "Light mode" [ref=e27] [cursor=pointer]:
+            - img [ref=e28]
+    - generic [ref=e34]:
+      - generic [ref=e35]: Workspace
+      - navigation "Primary" [ref=e36]:
+        - button "Swap" [ref=e37] [cursor=pointer]:
+          - img [ref=e39]
+          - generic [ref=e42]: Swap
+        - button "Launchpad" [ref=e43] [cursor=pointer]:
+          - generic:
+            - img
+          - img [ref=e45]
+          - generic [ref=e50]: Launchpad
+        - button "DeFi" [ref=e51] [cursor=pointer]:
+          - img [ref=e53]
+          - generic [ref=e55]: DeFi
+        - button "Wallet" [ref=e56] [cursor=pointer]:
+          - img [ref=e58]
+          - generic [ref=e61]: Wallet
+        - button "Crosschain" [ref=e62] [cursor=pointer]:
+          - img [ref=e64]
+          - generic [ref=e71]: Crosschain
+        - button "More" [ref=e72] [cursor=pointer]:
+          - img [ref=e74]
+          - generic [ref=e77]: More
+    - generic [ref=e78]:
+      - generic [ref=e79]: Runtime
+      - generic "Runtime status" [ref=e80]:
+        - generic [ref=e81]:
+          - generic [ref=e82]: View
+          - strong [ref=e83]: Launchpad
+        - generic [ref=e84]:
+          - generic [ref=e85]: Endpoint
+          - strong [ref=e86]: taira.sora.org
+        - generic [ref=e87]:
+          - generic [ref=e88]: Contracts
+          - strong [ref=e89]: "0"
+        - generic [ref=e90]:
+          - generic [ref=e91]: Connect
+          - strong [ref=e92]: Offline
+        - generic [ref=e93]:
+          - generic [ref=e94]: API
+          - strong [ref=e95]: n/a
+        - generic [ref=e96]:
+          - generic [ref=e97]: Registry
+          - strong [ref=e98]: testnet
+        - generic [ref=e99]:
+          - generic [ref=e100]: Runtime
+          - strong [ref=e101]:
+            - status "Loading" [ref=e102]
+            - text: Polling
+  - main [ref=e106]:
+    - main [ref=e109]:
+      - generic [ref=e111]:
+        - generic [ref=e112]:
+          - paragraph [ref=e113]: Launchpad
+          - heading "Live sales" [level=2] [ref=e114]
+          - paragraph [ref=e115]: The list now comes from live launchpad state instead of a static campaign catalog.
+          - generic [ref=e116]:
+            - button "Browse sales" [ref=e117] [cursor=pointer]
+            - button "Create sale" [ref=e118] [cursor=pointer]:
+              - generic:
+                - img
+              - text: Create sale
+        - generic [ref=e119]: No live "universal" contract instances were discovered on https://taira.sora.org.
+        - generic [ref=e120]:
+          - generic [ref=e121]:
+            - paragraph [ref=e122]: Execution inspector
+            - heading "Launchpad inspector" [level=3] [ref=e123]
+            - paragraph [ref=e124]: Human sale state stays in the main surface, while the raw payload and Torii responses remain visible here.
+          - generic [ref=e125]:
+            - generic [ref=e126]:
+              - generic [ref=e127]: Contract
+              - strong [ref=e128]: launchpad.sale_factory
+            - generic [ref=e129]:
+              - generic [ref=e130]: Authority
+              - strong [ref=e131]: "--"
+            - generic [ref=e132]:
+              - generic [ref=e133]: Wallet session
+              - strong [ref=e134]: Needed
+            - generic [ref=e135]:
+              - generic [ref=e136]: Current slot
+              - strong [ref=e137]: "--"
+          - generic [ref=e138]: Preview or prepare a launchpad flow and the payload stream will appear here.

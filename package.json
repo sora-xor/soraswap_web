@@ -1,0 +1,43 @@
+{
+  "name": "soraswap-web",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "sync:iroha-sdk": "node scripts/sync-iroha-js-sdk.mjs",
+    "sync:registry": "node scripts/sync-soraswap-registry.mjs",
+    "sync:registry:local": "SORASWAP_REGISTRY_ENV=local node scripts/sync-soraswap-registry.mjs",
+    "sync:registry:testnet": "SORASWAP_REGISTRY_ENV=testnet node scripts/sync-soraswap-registry.mjs",
+    "doctor:local": "node scripts/check-local-readiness.mjs",
+    "doctor:testnet": "node scripts/check-testnet-readiness.mjs",
+    "build:iroha-cli": "node scripts/build-iroha-cli-if-needed.mjs",
+    "compile:soraswap": "cd ../soraswap && make compile",
+    "verify:local:drafts": "node scripts/verify-local-torii-draft-signing.mjs",
+    "verify:local": "node scripts/verify-local-stack.mjs",
+    "verify:siblings": "npm run sync:iroha-sdk && npm run build:iroha-cli && npm run compile:soraswap && npm run sync:registry && npm run doctor:testnet",
+    "dev": "vite",
+    "build": "vite build",
+    "build:ipfs": "VITE_BASE=./ vite build",
+    "ipfs:publish": "node ./scripts/ipfs/publish.mjs",
+    "preview": "vite preview",
+    "typecheck": "vue-tsc --noEmit",
+    "test": "npm run typecheck && npm run test:unit",
+    "test:unit": "vitest run"
+  },
+  "dependencies": {
+    "@iroha/iroha-js": "file:../iroha/javascript/iroha_js",
+    "@noble/ciphers": "^2.1.1",
+    "@noble/curves": "^1.9.7",
+    "@noble/hashes": "^1.8.0",
+    "lucide-vue-next": "^0.552.0",
+    "vue": "^3.5.13"
+  },
+  "devDependencies": {
+    "@types/node": "^22.14.0",
+    "@vitejs/plugin-vue": "^5.2.1",
+    "typescript": "^5.8.2",
+    "vite": "^6.2.0",
+    "vitest": "^4.0.7",
+    "vue-tsc": "^2.2.8"
+  }
+}
