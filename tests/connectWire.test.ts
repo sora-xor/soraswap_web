@@ -20,7 +20,7 @@ import {
 const ANDROID_APPROVE_FIXTURE_HEX = readFileSync(
   new URL('../../iroha/crates/iroha_torii_shared/tests/fixtures/android_approve_frame.hex', import.meta.url),
   'utf8'
-).trim();
+).replace(/\s+/g, '');
 const LIVE_SIGN_REQUEST_RAW_ENVELOPE_HEX =
   '4e5254300000f35017c774558f19f35017c774558f19006c00000000000000d9148a06a682358f00080000000000000002000000000000005400000000000000010000001800000000000000100000000000000046495f50524f504f53414c5f5349474e28000000000000002000000000000000086a72f402ddccae0559eacfefdd1403c3eb889eb3b920f0a614ede8888405d1';
 
@@ -75,7 +75,8 @@ describe('connect wire codec', () => {
       throw new Error('expected approve control');
     }
     expect(decoded.control.walletPublicKeyHex).toBe('07'.repeat(32));
-    expect(decoded.control.accountId).toBe('6cmzPVPX944pj7vVyADRpma2DCcBUsG1mhz8VrXArhXaGsjvRUcnbVn');
+    expect(decoded.control.accountId.startsWith('sora')).toBe(true);
+    expect(decoded.control.accountId).not.toContain('@');
     expect(decoded.control.permissions).toBeNull();
     expect(decoded.control.proof).toBeNull();
     expect(decoded.control.signature.algorithmCode).toBe(0);

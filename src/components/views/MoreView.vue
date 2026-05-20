@@ -239,7 +239,7 @@ const openUri = (value: string) => {
         <div class="summary-list">
           <div>
             <span>Theme</span>
-            <strong>{{ theme }}</strong>
+            <strong>{{ theme === 'night' ? 'Dark' : 'Light' }}</strong>
           </div>
           <div>
             <span>App name</span>
@@ -251,8 +251,8 @@ const openUri = (value: string) => {
           </div>
         </div>
         <div class="action-row">
-          <button class="button is-ghost" type="button" @click="emit('set-theme', 'night')">Night</button>
-          <button class="button is-ghost" type="button" @click="emit('set-theme', 'paper')">Paper</button>
+          <button class="button is-ghost" type="button" @click="emit('set-theme', 'night')">Dark</button>
+          <button class="button is-ghost" type="button" @click="emit('set-theme', 'paper')">Light</button>
         </div>
       </section>
 

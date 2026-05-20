@@ -20,21 +20,36 @@ export interface SwapIntentInput extends SharedIntentInput {
   receiveToken: string;
   payAssetId?: string;
   receiveAssetId?: string;
-  spotVaultAccountId?: string;
   spotBaseAssetId?: string;
   spotQuoteAssetId?: string;
   amountIn: string;
   slippage: string;
   perpsDirection: 'Long' | 'Short';
-  perpsAction?: 'open' | 'addCollateral' | 'removeCollateral' | 'closeMarked' | 'liquidateMarked';
+  perpsAction?: 'open' | 'modify' | 'addMargin' | 'removeMargin' | 'close' | 'syncFunding' | 'liquidationPass';
+  perpsMarketId?: string;
   perpsPositionId: string;
   perpsSize: string;
-  perpsMarkPrice?: string;
-  optionsAction?: 'buy' | 'exercise';
+  perpsMargin?: string;
+  perpsLeverageBps?: string;
+  perpsMarkPriceBps?: string;
+  perpsIndexPriceBps?: string;
+  perpsConfidenceBps?: string;
+  perpsOracleSlot?: string;
+  perpsCurrentSlot?: string;
+  perpsStatusFlags?: string;
+  perpsAttestationHash?: string;
+  perpsMaxPositions?: string;
+  optionsAction?: 'buyShout' | 'buyOutperformance' | 'exerciseShout' | 'exerciseOutperformance';
   optionsSeriesId: string;
-  optionsTicketId: string;
-  optionsContracts?: string;
-  optionsPayout?: string;
+  optionsPositionId: string;
+  optionsNotional?: string;
+  optionsPremiumPaid?: string;
+  optionsCollateralLocked?: string;
+  optionsMarkPriceBps?: string;
+  optionsOracleSlot?: string;
+  optionsCurrentSlot?: string;
+  optionsStatusFlags?: string;
+  optionsAttestationHash?: string;
 }
 
 export interface LaunchpadCreateIntentInput extends SharedIntentInput {
@@ -43,7 +58,10 @@ export interface LaunchpadCreateIntentInput extends SharedIntentInput {
   paymentAssetId: string;
   treasuryAccountId: string;
   unitPrice: string;
+  softCap: string;
   hardCap: string;
+  claimStartSlot: string;
+  claimEndSlot: string;
 }
 
 export interface LaunchpadContributeIntentInput extends SharedIntentInput {
@@ -69,6 +87,7 @@ export interface LaunchpadCloseIntentInput extends SharedIntentInput {
 
 export interface LaunchpadSeedIntentInput extends SharedIntentInput {
   saleId: string;
+  claimInventoryAmount: string;
 }
 
 export type DefiOperationKind =
@@ -76,9 +95,9 @@ export type DefiOperationKind =
   | 'n3x_redeem'
   | 'farm_stake'
   | 'farm_claim'
-  | 'cover_buy'
+  | 'cover_register'
   | 'cover_claim'
-  | 'cover_cancel'
+  | 'cover_expire'
   | 'automation_enqueue'
   | 'automation_configure'
   | 'automation_pause'
@@ -111,22 +130,27 @@ export type DefiIntentInput =
       position: string;
     } & SharedIntentInput)
   | ({
-      kind: 'cover_buy';
+      kind: 'cover_register';
       authorityAccountId: string;
-      policy: string;
+      lowerBound: string;
+      upperBound: string;
+      payoutAmount: string;
+      monitoringWindowSlots: string;
+      requiredObservations: string;
       coveredNotional: string;
+      premiumPaid: string;
+      registrationSlot: string;
     } & SharedIntentInput)
   | ({
       kind: 'cover_claim';
       authorityAccountId: string;
-      policy: string;
-      coveredNotional: string;
+      policyId: string;
     } & SharedIntentInput)
   | ({
-      kind: 'cover_cancel';
+      kind: 'cover_expire';
       authorityAccountId: string;
-      policy: string;
-      refundBps: string;
+      policyId: string;
+      currentSlot: string;
     } & SharedIntentInput)
   | ({
       kind: 'automation_enqueue';
@@ -211,21 +235,53 @@ const requireNonNegativeIntegerString = (label: string, value: string) => {
   return normalized;
 };
 
+const requireOraclePayload = (
+  prefix: string,
+  input: {
+    markPriceBps?: string;
+    indexPriceBps?: string;
+    confidenceBps?: string;
+    oracleSlot?: string;
+    currentSlot?: string;
+    statusFlags?: string;
+    attestationHash?: string;
+  }
+) => [
+  requirePositiveIntegerString(`${prefix} mark price bps`, input.markPriceBps || ''),
+  requirePositiveIntegerString(`${prefix} index price bps`, input.indexPriceBps || ''),
+  requireNonNegativeIntegerString(`${prefix} confidence bps`, input.confidenceBps || '0'),
+  requireNonNegativeIntegerString(`${prefix} oracle slot`, input.oracleSlot || ''),
+  requireNonNegativeIntegerString(`${prefix} current slot`, input.currentSlot || ''),
+  requireNonNegativeIntegerString(`${prefix} status flags`, input.statusFlags || '0'),
+  requireNonNegativeIntegerString(`${prefix} attestation hash`, input.attestationHash || '')
+];
+
+const requireOptionsOracleFields = (
+  input: Pick<
+    SwapIntentInput,
+    'optionsMarkPriceBps' | 'optionsOracleSlot' | 'optionsCurrentSlot' | 'optionsStatusFlags' | 'optionsAttestationHash'
+  >
+) => ({
+  mark_price_bps: requirePositiveIntegerString('Options mark price bps', input.optionsMarkPriceBps || ''),
+  oracle_slot: requireNonNegativeIntegerString('Options oracle slot', input.optionsOracleSlot || ''),
+  current_slot: requireNonNegativeIntegerString('Options current slot', input.optionsCurrentSlot || ''),
+  status_flags: requireNonNegativeIntegerString('Options status flags', input.optionsStatusFlags || '0'),
+  attestation_hash: requireNonNegativeIntegerString('Options attestation hash', input.optionsAttestationHash || '')
+});
+
 export const buildSwapIntent = (input: SwapIntentInput): ContractIntentSpec => {
   switch (input.mode) {
     case 'Spot': {
-      const { contractKey, contractAddress } = resolveContractBinding(ROLE_BY_CONTRACT_KEY.spotPool);
+      const { contractKey, contractAddress } = resolveContractBinding(ROLE_BY_CONTRACT_KEY.spotRouter);
+      const inputAssetId = requireNonEmptyString('Input asset', input.payAssetId || '');
+      const baseAssetId = requireNonEmptyString('Live DLMM base asset', input.spotBaseAssetId || '');
       return {
         contractKey,
         contractAddress,
-        entrypoint: 'swap_exact_in_with_assets',
+        entrypoint: 'route_swap',
         payload: {
-          trader: requireNonEmptyString('Authority account', input.authorityAccountId),
-          input_asset: requireNonEmptyString('Input asset', input.payAssetId || ''),
-          vault: requireNonEmptyString('Live DLMM vault', input.spotVaultAccountId || ''),
-          base_asset: requireNonEmptyString('Live DLMM base asset', input.spotBaseAssetId || ''),
-          quote_asset: requireNonEmptyString('Live DLMM quote asset', input.spotQuoteAssetId || ''),
           amount_in: requirePositiveIntegerString('Amount in', input.amountIn),
+          input_is_base: inputAssetId === baseAssetId ? 1 : 0,
           min_out: requirePositiveIntegerString('Minimum output', input.slippage)
         }
       };
@@ -233,77 +289,116 @@ export const buildSwapIntent = (input: SwapIntentInput): ContractIntentSpec => {
     case 'Perps': {
       const { contractKey, contractAddress } = resolveContractBinding(ROLE_BY_CONTRACT_KEY.perpsEngine);
       const action = input.perpsAction || 'open';
-      const position = requireNonEmptyString('Position id', input.perpsPositionId);
+      const oraclePayload = () =>
+        requireOraclePayload('Perps oracle', {
+          markPriceBps: input.perpsMarkPriceBps,
+          indexPriceBps: input.perpsIndexPriceBps,
+          confidenceBps: input.perpsConfidenceBps,
+          oracleSlot: input.perpsOracleSlot,
+          currentSlot: input.perpsCurrentSlot,
+          statusFlags: input.perpsStatusFlags,
+          attestationHash: input.perpsAttestationHash
+        });
+      const positionId = () => requirePositiveIntegerString('Position id', input.perpsPositionId);
+      const marketId = () => requirePositiveIntegerString('Market id', input.perpsMarketId || '');
       return {
         contractKey,
         contractAddress,
         entrypoint:
-          action === 'addCollateral'
-            ? 'add_collateral'
-            : action === 'removeCollateral'
-              ? 'remove_collateral'
-              : action === 'closeMarked'
-                ? 'close_position_marked'
-                : action === 'liquidateMarked'
-                  ? 'liquidate_position_marked'
-                  : 'open_position',
+          action === 'modify'
+            ? 'modify_position'
+            : action === 'addMargin'
+              ? 'add_margin'
+              : action === 'removeMargin'
+                ? 'remove_margin'
+                : action === 'close'
+                  ? 'close_position'
+                  : action === 'syncFunding'
+                    ? 'sync_funding'
+                    : action === 'liquidationPass'
+                      ? 'run_liquidation_pass'
+                      : 'open_position',
         payload:
-          action === 'addCollateral'
+          action === 'modify'
             ? {
-                trader: requireNonEmptyString('Authority account', input.authorityAccountId),
-                position,
-                amount: requirePositiveIntegerString('Collateral amount', input.amountIn)
+                position_id: positionId(),
+                size_delta: input.perpsDirection === 'Short'
+                  ? (-BigInt(requirePositiveIntegerString('Size delta', input.perpsSize))).toString()
+                  : requirePositiveIntegerString('Size delta', input.perpsSize),
+                margin_delta: requireIntegerString('Margin delta', input.perpsMargin || input.amountIn),
+                requested_leverage_bps: requirePositiveIntegerString('Requested leverage bps', input.perpsLeverageBps || ''),
+                oracle_payload: oraclePayload()
               }
-            : action === 'removeCollateral'
+            : action === 'addMargin'
               ? {
-                  trader: requireNonEmptyString('Authority account', input.authorityAccountId),
-                  position,
-                  amount: requirePositiveIntegerString('Collateral amount', input.amountIn)
+                  position_id: positionId(),
+                  amount: requirePositiveIntegerString('Margin amount', input.perpsMargin || input.amountIn)
                 }
-              : action === 'closeMarked'
+              : action === 'removeMargin'
                 ? {
-                    trader: requireNonEmptyString('Authority account', input.authorityAccountId),
-                    position,
-                    mark_price: requirePositiveIntegerString('Mark price', input.perpsMarkPrice || '')
+                    position_id: positionId(),
+                    amount: requirePositiveIntegerString('Margin amount', input.perpsMargin || input.amountIn),
+                    oracle_payload: oraclePayload()
                   }
-                : action === 'liquidateMarked'
+                : action === 'close'
                   ? {
-                      liquidator: requireNonEmptyString('Authority account', input.authorityAccountId),
-                      position,
-                      mark_price: requirePositiveIntegerString('Mark price', input.perpsMarkPrice || '')
+                      position_id: positionId(),
+                      oracle_payload: oraclePayload()
                     }
-                  : (() => {
-                      const size = requirePositiveIntegerString('Position size', input.perpsSize);
-                      const signedSize = input.perpsDirection === 'Short' ? (-BigInt(size)).toString() : size;
-                      return {
-                        trader: requireNonEmptyString('Authority account', input.authorityAccountId),
-                        position,
-                        size: signedSize,
-                        collateral: requirePositiveIntegerString('Collateral', input.amountIn)
-                      };
-                    })()
+                  : action === 'syncFunding'
+                    ? {
+                        market_id: marketId(),
+                        oracle_payload: oraclePayload()
+                      }
+                    : action === 'liquidationPass'
+                      ? {
+                          market_id: marketId(),
+                          max_positions: requirePositiveIntegerString('Max positions', input.perpsMaxPositions || ''),
+                          oracle_payload: oraclePayload()
+                        }
+                      : (() => {
+                          const size = requirePositiveIntegerString('Position size', input.perpsSize);
+                          const signedSize = input.perpsDirection === 'Short' ? (-BigInt(size)).toString() : size;
+                          return {
+                            market_id: marketId(),
+                            size: signedSize,
+                            margin: requirePositiveIntegerString('Margin', input.perpsMargin || input.amountIn),
+                            requested_leverage_bps: requirePositiveIntegerString('Requested leverage bps', input.perpsLeverageBps || ''),
+                            oracle_payload: oraclePayload()
+                          };
+                        })()
       };
     }
     case 'Options': {
-      const { contractKey, contractAddress } = resolveContractBinding(ROLE_BY_CONTRACT_KEY.optionsSeriesManager);
-      const action = input.optionsAction || 'buy';
+      const { contractKey, contractAddress } = resolveContractBinding(ROLE_BY_CONTRACT_KEY.optionsFactory);
+      const action = input.optionsAction || 'buyShout';
       return {
         contractKey,
         contractAddress,
-        entrypoint: action === 'exercise' ? 'exercise' : 'buy_option_sized',
+        entrypoint:
+          action === 'buyOutperformance'
+            ? 'buy_outperformance'
+            : action === 'exerciseShout'
+              ? 'exercise_shout_position'
+              : action === 'exerciseOutperformance'
+                ? 'exercise_outperformance_position'
+                : 'buy_shout',
         payload:
-          action === 'exercise'
+          action === 'exerciseShout'
             ? {
-                buyer: requireNonEmptyString('Authority account', input.authorityAccountId),
-                ticket: requireNonEmptyString('Ticket id', input.optionsTicketId),
-                payout: requireNonNegativeIntegerString('Payout', input.optionsPayout || '')
+                position_id: requirePositiveIntegerString('Position id', input.optionsPositionId),
+                ...requireOptionsOracleFields(input)
               }
-            : {
-                buyer: requireNonEmptyString('Authority account', input.authorityAccountId),
-                series: requireNonEmptyString('Series id', input.optionsSeriesId),
-                ticket: requireNonEmptyString('Ticket id', input.optionsTicketId),
-                contracts: requirePositiveIntegerString('Contracts', input.optionsContracts || '1')
-              }
+            : action === 'exerciseOutperformance'
+              ? {
+                  position_id: requirePositiveIntegerString('Position id', input.optionsPositionId)
+                }
+              : {
+                  series_id: requirePositiveIntegerString('Series id', input.optionsSeriesId),
+                  notional: requirePositiveIntegerString('Notional', input.optionsNotional || ''),
+                  premium_paid: requirePositiveIntegerString('Premium paid', input.optionsPremiumPaid || input.amountIn),
+                  collateral_locked: requirePositiveIntegerString('Collateral locked', input.optionsCollateralLocked || '')
+                }
       };
     }
   }
@@ -321,7 +416,10 @@ export const buildLaunchpadCreateIntent = (input: LaunchpadCreateIntentInput): C
       payment_asset: requireNonEmptyString('Payment asset', input.paymentAssetId),
       treasury: requireNonEmptyString('Treasury account', input.treasuryAccountId),
       unit_price: requirePositiveIntegerString('Unit price', input.unitPrice),
-      hard_cap: requirePositiveIntegerString('Hard cap', input.hardCap)
+      soft_cap: requireNonNegativeIntegerString('Soft cap', input.softCap),
+      hard_cap: requirePositiveIntegerString('Hard cap', input.hardCap),
+      claim_start_slot: requireNonNegativeIntegerString('Claim start slot', input.claimStartSlot),
+      claim_end_slot: requireNonNegativeIntegerString('Claim end slot', input.claimEndSlot)
     }
   };
 };
@@ -335,7 +433,6 @@ export const buildLaunchpadContributeIntent = (
     contractAddress,
     entrypoint: 'contribute',
     payload: {
-      buyer: requireNonEmptyString('Authority account', input.authorityAccountId),
       sale: requireNonEmptyString('Sale id', input.saleId),
       payment_amount: requirePositiveIntegerString('Payment amount', input.paymentAmount)
     }
@@ -349,7 +446,6 @@ export const buildLaunchpadClaimIntent = (input: LaunchpadClaimIntentInput): Con
     contractAddress,
     entrypoint: 'claim_allocation',
     payload: {
-      buyer: requireNonEmptyString('Authority account', input.authorityAccountId),
       allocation: requireNonEmptyString('Allocation id', input.allocationId),
       current_slot: requireNonNegativeIntegerString('Current slot', input.currentSlot)
     }
@@ -363,7 +459,6 @@ export const buildLaunchpadRefundIntent = (input: LaunchpadRefundIntentInput): C
     contractAddress,
     entrypoint: 'refund_allocation',
     payload: {
-      buyer: requireNonEmptyString('Authority account', input.authorityAccountId),
       allocation: requireNonEmptyString('Allocation id', input.allocationId)
     }
   };
@@ -386,9 +481,10 @@ export const buildLaunchpadSeedIntent = (input: LaunchpadSeedIntentInput): Contr
   return {
     contractKey,
     contractAddress,
-    entrypoint: 'seed_liquidity',
+    entrypoint: 'finalize_sale_activation',
     payload: {
-      sale: requireNonEmptyString('Sale id', input.saleId)
+      sale: requireNonEmptyString('Sale id', input.saleId),
+      claim_inventory_amount: requireNonNegativeIntegerString('Claim inventory amount', input.claimInventoryAmount)
     }
   };
 };
@@ -402,7 +498,6 @@ export const buildDefiIntent = (input: DefiIntentInput): ContractIntentSpec => {
         contractAddress,
         entrypoint: 'deposit_and_mint',
         payload: {
-          user: input.authorityAccountId,
           usdt_in: requireNonNegativeIntegerString('USDT in', input.usdtIn),
           usdc_in: requireNonNegativeIntegerString('USDC in', input.usdcIn),
           kusd_in: requireNonNegativeIntegerString('KUSD in', input.kusdIn)
@@ -416,7 +511,6 @@ export const buildDefiIntent = (input: DefiIntentInput): ContractIntentSpec => {
         contractAddress,
         entrypoint: 'burn_and_redeem',
         payload: {
-          user: input.authorityAccountId,
           n3x_amount: requirePositiveIntegerString('n3x amount', input.n3xAmount)
         }
       };
@@ -428,7 +522,6 @@ export const buildDefiIntent = (input: DefiIntentInput): ContractIntentSpec => {
         contractAddress,
         entrypoint: 'stake',
         payload: {
-          staker: input.authorityAccountId,
           position: input.position,
           amount: requirePositiveIntegerString('Amount', input.amount)
         }
@@ -441,21 +534,25 @@ export const buildDefiIntent = (input: DefiIntentInput): ContractIntentSpec => {
         contractAddress,
         entrypoint: 'claim',
         payload: {
-          staker: input.authorityAccountId,
           position: input.position
         }
       };
     }
-    case 'cover_buy': {
+    case 'cover_register': {
       const { contractKey, contractAddress } = resolveContractBinding(ROLE_BY_CONTRACT_KEY.coverPolicyManager);
       return {
         contractKey,
         contractAddress,
-        entrypoint: 'buy_policy_sized',
+        entrypoint: 'register_policy',
         payload: {
-          buyer: input.authorityAccountId,
-          policy: requireNonEmptyString('Policy id', input.policy),
-          covered_notional: requirePositiveIntegerString('Covered notional', input.coveredNotional)
+          lower_bound: requireIntegerString('Lower bound', input.lowerBound),
+          upper_bound: requireIntegerString('Upper bound', input.upperBound),
+          payout_amount: requirePositiveIntegerString('Payout amount', input.payoutAmount),
+          monitoring_window_slots: requirePositiveIntegerString('Monitoring window slots', input.monitoringWindowSlots),
+          required_observations: requirePositiveIntegerString('Required observations', input.requiredObservations),
+          covered_notional: requirePositiveIntegerString('Covered notional', input.coveredNotional),
+          premium_paid: requirePositiveIntegerString('Premium paid', input.premiumPaid),
+          registration_slot: requireNonNegativeIntegerString('Registration slot', input.registrationSlot)
         }
       };
     }
@@ -464,24 +561,21 @@ export const buildDefiIntent = (input: DefiIntentInput): ContractIntentSpec => {
       return {
         contractKey,
         contractAddress,
-        entrypoint: 'settle_claim',
+        entrypoint: 'route_claim',
         payload: {
-          claimant: input.authorityAccountId,
-          policy: requireNonEmptyString('Policy id', input.policy),
-          covered_notional: requirePositiveIntegerString('Covered notional', input.coveredNotional)
+          policy_id: requirePositiveIntegerString('Policy id', input.policyId)
         }
       };
     }
-    case 'cover_cancel': {
+    case 'cover_expire': {
       const { contractKey, contractAddress } = resolveContractBinding(ROLE_BY_CONTRACT_KEY.coverPolicyManager);
       return {
         contractKey,
         contractAddress,
-        entrypoint: 'cancel_policy',
+        entrypoint: 'expire_policy',
         payload: {
-          buyer: input.authorityAccountId,
-          policy: requireNonEmptyString('Policy id', input.policy),
-          refund_bps: requireNonNegativeIntegerString('Refund bps', input.refundBps)
+          policy_id: requirePositiveIntegerString('Policy id', input.policyId),
+          current_slot: requireNonNegativeIntegerString('Current slot', input.currentSlot)
         }
       };
     }
@@ -493,7 +587,6 @@ export const buildDefiIntent = (input: DefiIntentInput): ContractIntentSpec => {
         entrypoint: 'enqueue',
         payload: {
           job: requireNonEmptyString('Job id', input.job),
-          owner: input.authorityAccountId,
           payload_hash: requirePositiveIntegerString('Payload hash', input.payloadHash)
         }
       };
@@ -567,7 +660,7 @@ const ROLE_BY_CONTRACT_KEY = {
   farm: 'farms.farm',
   launchpadSaleFactory: 'launchpad.sale_factory',
   n3xHub: 'n3x.n3x_hub',
-  optionsSeriesManager: 'options.series_manager',
+  optionsFactory: 'options.factory',
   perpsEngine: 'perps.perps_engine',
   referralRegistry: 'referral.registry',
   spotPool: 'dlmm.dlmm_pool',

@@ -58,7 +58,7 @@ const goToView = (view: ViewType) => emit('change-view', view);
 </script>
 
 <template>
-  <div class="app-shell">
+  <div class="app-shell" :class="`app-shell--${activeView}`">
     <aside class="desktop-sidebar glass-panel">
       <div class="desktop-sidebar__top">
         <button class="brand-lockup" type="button" @click="goToView('swap')">
@@ -100,6 +100,7 @@ const goToView = (view: ViewType) => emit('change-view', view);
             class="nav-link"
             :class="{ 'is-active': item.id === activeView }"
             type="button"
+            :aria-current="item.id === activeView ? 'page' : undefined"
             @click="goToView(item.id)"
           >
             <span class="nav-icon-wrap">
@@ -218,7 +219,7 @@ const goToView = (view: ViewType) => emit('change-view', view);
 
       <main class="app-main-glass">
         <div class="page-scroll no-scrollbar">
-          <section class="page-frame">
+          <section class="page-frame" :data-view="activeView">
             <main class="page">
               <slot />
             </main>
@@ -233,6 +234,7 @@ const goToView = (view: ViewType) => emit('change-view', view);
               class="mobile-tab"
               :class="{ 'is-active': activeView === item.id }"
               type="button"
+              :aria-current="activeView === item.id ? 'page' : undefined"
               @click="goToView(item.id)"
             >
               <component :is="item.icon" :size="18" />

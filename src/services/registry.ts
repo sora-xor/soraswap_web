@@ -11,10 +11,16 @@ export type ContractRole =
   | 'coverPolicyManager'
   | 'farm'
   | 'launchpadSaleFactory'
+  | 'launchpadLiquidityExecutor'
   | 'n3xHub'
-  | 'optionsSeriesManager'
+  | 'optionsFactory'
+  | 'optionsManager'
+  | 'optionsVault'
+  | 'optionsShout'
+  | 'optionsOutperformance'
   | 'perpsEngine'
   | 'referralRegistry'
+  | 'riskVault'
   | 'spotPool'
   | 'spotRouter';
 
@@ -23,10 +29,16 @@ const ROLE_FALLBACKS: Record<ContractRole, string> = {
   coverPolicyManager: 'cover.policy_manager',
   farm: 'farms.farm',
   launchpadSaleFactory: 'launchpad.sale_factory',
+  launchpadLiquidityExecutor: 'launchpad.liquidity_executor',
   n3xHub: 'n3x.n3x_hub',
-  optionsSeriesManager: 'options.series_manager',
+  optionsFactory: 'options.factory',
+  optionsManager: 'options.manager',
+  optionsVault: 'options.vault',
+  optionsShout: 'options.shout_option',
+  optionsOutperformance: 'options.outperformance_option',
   perpsEngine: 'perps.perps_engine',
   referralRegistry: 'referral.registry',
+  riskVault: 'risk.risk_vault',
   spotPool: 'dlmm.dlmm_pool',
   spotRouter: 'dlmm.dlmm_router'
 };
@@ -37,11 +49,12 @@ const MODULE_ROLE_MAP: Record<string, ContractRole[]> = {
   crosschain: [],
   dlmm: ['spotPool', 'spotRouter'],
   farms: ['farm'],
-  launchpad: ['launchpadSaleFactory'],
+  launchpad: ['launchpadSaleFactory', 'launchpadLiquidityExecutor'],
   n3x: ['n3xHub'],
-  options: ['optionsSeriesManager'],
+  options: ['optionsFactory', 'optionsManager', 'optionsVault', 'optionsShout', 'optionsOutperformance'],
   perps: ['perpsEngine'],
-  referral: ['referralRegistry']
+  referral: ['referralRegistry'],
+  risk: ['riskVault']
 };
 
 const registryEntries = generatedSoraswapRegistry.contracts;

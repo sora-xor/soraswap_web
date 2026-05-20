@@ -29,7 +29,7 @@ export const SORASWAP_MODULES: ModuleSpec[] = [
     contract: 'contracts/dlmm/dlmm_pool.ko',
     status: 'adapted',
     summary: 'Primary AMM venue for Spot routing and liquidity.',
-    capability: 'Pool execution is wired; the router remains quote-only until cross-contract routing exists.'
+    capability: 'Router execution is wired through route_swap once a deployed router address is discovered.'
   },
   {
     id: 'perps',
@@ -41,11 +41,11 @@ export const SORASWAP_MODULES: ModuleSpec[] = [
   },
   {
     id: 'options',
-    label: 'Options Series',
-    contract: 'contracts/options/series_manager.ko',
+    label: 'Options Factory',
+    contract: 'contracts/options/factory.ko',
     status: 'adapted',
-    summary: 'Series discovery, buy, and exercise workflow.',
-    capability: 'Reference pricing is available even when no live contracts are discovered.'
+    summary: 'User-facing shout and outperformance buy/exercise workflow.',
+    capability: 'Factory drafts target contract-assigned position ids and verified oracle payloads.'
   },
   {
     id: 'farms',

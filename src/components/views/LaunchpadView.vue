@@ -59,8 +59,12 @@ const createSaleAssetId = ref('sindex#soraswap.launchpad');
 const createPaymentAssetId = ref('xor#universal');
 const createTreasuryAccountId = ref('');
 const createUnitPrice = ref('1');
+const createSoftCap = ref('0');
 const createHardCap = ref('120000');
+const createClaimStartSlot = ref('0');
+const createClaimEndSlot = ref('0');
 const contributeAmount = ref('1000');
+const seedClaimInventoryAmount = ref('0');
 const detailAction = ref<LaunchpadAction>('contribute');
 
 const launchpadContractKey = 'launchpad.sale_factory';
@@ -262,8 +266,12 @@ watch(
     createPaymentAssetId.value,
     createTreasuryAccountId.value,
     createUnitPrice.value,
+    createSoftCap.value,
     createHardCap.value,
+    createClaimStartSlot.value,
+    createClaimEndSlot.value,
     contributeAmount.value,
+    seedClaimInventoryAmount.value,
     props.authorityAccountId
   ],
   () => {
@@ -383,6 +391,7 @@ const buildCreateIntent = async () => {
   ]);
   const paymentScale = paymentAssetMeta.scale ?? 0;
   const unitPrice = scaleDecimalToBaseUnits(createUnitPrice.value, paymentScale, 'Unit price');
+  const softCap = scaleDecimalToBaseUnits(createSoftCap.value, paymentScale, 'Soft cap', { allowZero: true });
   const hardCap = scaleDecimalToBaseUnits(createHardCap.value, paymentScale, 'Hard cap');
   const intent = buildLaunchpadCreateIntent({
     saleId: createSaleId.value,
@@ -391,14 +400,19 @@ const buildCreateIntent = async () => {
     paymentAssetId: paymentAssetMeta.id,
     treasuryAccountId: createTreasuryAccountId.value,
     unitPrice,
+    softCap,
     hardCap,
+    claimStartSlot: createClaimStartSlot.value,
+    claimEndSlot: createClaimEndSlot.value,
     gate: props.writeGateReason
   });
   reviewItems.value = [
     { label: 'Sale asset', value: saleAssetMeta.alias || saleAssetMeta.id },
     { label: 'Payment asset', value: paymentAssetMeta.alias || paymentAssetMeta.id },
     { label: 'Unit price', value: `${createUnitPrice.value} -> ${unitPrice}` },
-    { label: 'Hard cap', value: `${createHardCap.value} -> ${hardCap}` }
+    { label: 'Soft cap', value: `${createSoftCap.value} -> ${softCap}` },
+    { label: 'Hard cap', value: `${createHardCap.value} -> ${hardCap}` },
+    { label: 'Claim slots', value: `${createClaimStartSlot.value} - ${createClaimEndSlot.value}` }
   ];
   createIntent.value = JSON.stringify(intent.payload, null, 2);
   return intent;
@@ -495,14 +509,22 @@ const buildDetailIntent = async () => {
       return intent;
     }
     case 'seed': {
+      const saleAssetMeta = await resolveAssetDefinitionMetadata(props.toriiUrl, sale.saleAssetId, 'Sale asset');
+      const claimInventoryAmount = scaleDecimalToBaseUnits(
+        seedClaimInventoryAmount.value,
+        saleAssetMeta.scale ?? 0,
+        'Claim inventory amount',
+        { allowZero: true }
+      );
       const intent = buildLaunchpadSeedIntent({
         saleId: sale.id,
+        claimInventoryAmount,
         dataspace: props.dataspace,
         gate: props.writeGateReason
       });
       reviewItems.value = [
         { label: 'Sale', value: sale.id },
-        { label: 'Claim inventory', value: formatAssetQuantity(sale.claimInventory, sale.saleAssetId) }
+        { label: 'Claim inventory amount', value: `${seedClaimInventoryAmount.value} -> ${claimInventoryAmount}` }
       ];
       createIntent.value = JSON.stringify(intent.payload, null, 2);
       return intent;
@@ -768,6 +790,10 @@ const handlePrimaryAction = async () => {
             <span>Payment amount</span>
             <input v-model="contributeAmount" class="input" inputmode="decimal" />
           </label>
+          <label v-if="detailAction === 'seed'" class="field">
+            <span>Claim inventory amount</span>
+            <input v-model="seedClaimInventoryAmount" class="input" inputmode="decimal" />
+          </label>
         </template>
 
         <template v-else-if="route.mode === 'create'">
@@ -801,8 +827,20 @@ const handlePrimaryAction = async () => {
               <input v-model="createUnitPrice" class="input" inputmode="decimal" />
             </label>
             <label class="field">
+              <span>Soft cap</span>
+              <input v-model="createSoftCap" class="input" inputmode="decimal" />
+            </label>
+            <label class="field">
               <span>Hard cap</span>
               <input v-model="createHardCap" class="input" inputmode="decimal" />
+            </label>
+            <label class="field">
+              <span>Claim start slot</span>
+              <input v-model="createClaimStartSlot" class="input mono" inputmode="numeric" />
+            </label>
+            <label class="field">
+              <span>Claim end slot</span>
+              <input v-model="createClaimEndSlot" class="input mono" inputmode="numeric" />
             </label>
           </div>
         </template>

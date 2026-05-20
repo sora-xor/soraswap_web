@@ -5,6 +5,7 @@ import {
   createConnectPreview,
   registerConnectSession,
   resolveConnectLaunchUri,
+  shouldAllowInsecureConnectWebSocket,
   toBase64Url,
 } from '@/services/connect';
 
@@ -24,6 +25,14 @@ describe('connect helpers', () => {
     expect(buildConnectWebSocketUrl('https://taira.sora.org', 'sid123', 'app')).toBe(
       'wss://taira.sora.org/v1/connect/ws?sid=sid123&role=app'
     );
+  });
+
+  test('only allows insecure connect sockets for loopback dev endpoints', () => {
+    expect(shouldAllowInsecureConnectWebSocket('http://127.0.0.1:8080')).toBe(true);
+    expect(shouldAllowInsecureConnectWebSocket('http://localhost:8080')).toBe(true);
+    expect(shouldAllowInsecureConnectWebSocket('http://[::1]:8080')).toBe(true);
+    expect(shouldAllowInsecureConnectWebSocket('https://taira.sora.org')).toBe(false);
+    expect(shouldAllowInsecureConnectWebSocket('http://torii.example')).toBe(false);
   });
 
   test('maps browser connect previews into the app preview shape', () => {

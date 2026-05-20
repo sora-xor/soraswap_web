@@ -7,9 +7,19 @@ import {
 } from '@/services/intents';
 import { resolveContractAddressForRole } from '@/services/registry';
 
+const oraclePayload = {
+  perpsMarkPriceBps: '10000',
+  perpsIndexPriceBps: '10000',
+  perpsConfidenceBps: '0',
+  perpsOracleSlot: '42',
+  perpsCurrentSlot: '43',
+  perpsStatusFlags: '0',
+  perpsAttestationHash: '7'
+};
+
 describe('intent builders', () => {
-  test('buildSwapIntent emits spot pool payloads with live pool fields', () => {
-    const spotPoolContractAddress = resolveContractAddressForRole('spotPool');
+  test('buildSwapIntent emits router spot payloads', () => {
+    const spotRouterContractAddress = resolveContractAddressForRole('spotRouter');
     const intent = buildSwapIntent({
       mode: 'Spot',
       authorityAccountId: 'i105authority',
@@ -18,34 +28,29 @@ describe('intent builders', () => {
       receiveToken: 'USDT',
       payAssetId: 'xor-id',
       receiveAssetId: 'usdt-id',
-      spotVaultAccountId: 'vault-account',
       spotBaseAssetId: 'xor-id',
       spotQuoteAssetId: 'usdt-id',
       amountIn: '100',
       slippage: '14',
       perpsDirection: 'Long',
-      perpsPositionId: 'xor-usdt-main',
+      perpsPositionId: '1',
       perpsSize: '300',
-      optionsSeriesId: 'xor-usdt-apr',
-      optionsTicketId: 'ticket-001',
+      optionsSeriesId: '1',
+      optionsPositionId: '1',
       gate: 'gate'
     });
 
-    expect(intent.contractKey).toBe('dlmm.dlmm_pool');
-    expect(intent.contractAddress).toBe(spotPoolContractAddress);
-    expect(intent.entrypoint).toBe('swap_exact_in_with_assets');
+    expect(intent.contractKey).toBe('dlmm.dlmm_router');
+    expect(intent.contractAddress).toBe(spotRouterContractAddress);
+    expect(intent.entrypoint).toBe('route_swap');
     expect(intent.payload).toEqual({
-      trader: 'i105authority',
-      input_asset: 'xor-id',
-      vault: 'vault-account',
-      base_asset: 'xor-id',
-      quote_asset: 'usdt-id',
       amount_in: '100',
+      input_is_base: 1,
       min_out: '14'
     });
   });
 
-  test('buildLaunchpadCreateIntent maps to init_sale fields', () => {
+  test('buildLaunchpadCreateIntent maps to current init_sale fields', () => {
     const launchpadContractAddress = resolveContractAddressForRole('launchpadSaleFactory');
     const intent = buildLaunchpadCreateIntent({
       saleId: 'sora-index',
@@ -53,7 +58,10 @@ describe('intent builders', () => {
       paymentAssetId: 'xor-id',
       treasuryAccountId: 'i105treasury',
       unitPrice: '1',
+      softCap: '1000',
       hardCap: '120000',
+      claimStartSlot: '10',
+      claimEndSlot: '20',
       dataspace: 'universal',
       gate: 'gate'
     });
@@ -67,11 +75,14 @@ describe('intent builders', () => {
       payment_asset: 'xor-id',
       treasury: 'i105treasury',
       unit_price: '1',
-      hard_cap: '120000'
+      soft_cap: '1000',
+      hard_cap: '120000',
+      claim_start_slot: '10',
+      claim_end_slot: '20'
     });
   });
 
-  test('buildLaunchpadContributeIntent emits sale reference payloads', () => {
+  test('buildLaunchpadContributeIntent omits caller identity from authority-bound ABI', () => {
     const launchpadContractAddress = resolveContractAddressForRole('launchpadSaleFactory');
     const intent = buildLaunchpadContributeIntent({
       authorityAccountId: 'i105authority',
@@ -85,13 +96,12 @@ describe('intent builders', () => {
     expect(intent.contractAddress).toBe(launchpadContractAddress);
     expect(intent.entrypoint).toBe('contribute');
     expect(intent.payload).toEqual({
-      buyer: 'i105authority',
       sale: 'sora-index',
       payment_amount: '1000'
     });
   });
 
-  test('buildDefiIntent maps n3x mint and farm claim to their contract payloads', () => {
+  test('buildDefiIntent maps n3x mint and farm claim to authority-bound payloads', () => {
     const n3xContractAddress = resolveContractAddressForRole('n3xHub');
     const farmContractAddress = resolveContractAddressForRole('farm');
     const mintIntent = buildDefiIntent({
@@ -115,7 +125,6 @@ describe('intent builders', () => {
     expect(mintIntent.contractAddress).toBe(n3xContractAddress);
     expect(mintIntent.entrypoint).toBe('deposit_and_mint');
     expect(mintIntent.payload).toEqual({
-      user: 'i105authority',
       usdt_in: '100',
       usdc_in: '50',
       kusd_in: '25'
@@ -124,14 +133,13 @@ describe('intent builders', () => {
     expect(claimIntent.contractAddress).toBe(farmContractAddress);
     expect(claimIntent.entrypoint).toBe('claim');
     expect(claimIntent.payload).toEqual({
-      staker: 'i105authority',
       position: 'core-lp'
     });
   });
 
-  test('buildSwapIntent maps perps and options to direct entrypoints', () => {
+  test('buildSwapIntent maps perps and options to current entrypoints', () => {
     const perpsContractAddress = resolveContractAddressForRole('perpsEngine');
-    const optionsContractAddress = resolveContractAddressForRole('optionsSeriesManager');
+    const optionsContractAddress = resolveContractAddressForRole('optionsFactory');
     const perpsIntent = buildSwapIntent({
       mode: 'Perps',
       authorityAccountId: 'i105authority',
@@ -141,10 +149,15 @@ describe('intent builders', () => {
       amountIn: '250',
       slippage: '0',
       perpsDirection: 'Short',
-      perpsPositionId: 'xor-usdt-main',
+      perpsAction: 'open',
+      perpsMarketId: '1',
+      perpsPositionId: '1',
       perpsSize: '750',
-      optionsSeriesId: 'xor-usdt-apr',
-      optionsTicketId: 'ticket-001',
+      perpsMargin: '250',
+      perpsLeverageBps: '10000',
+      ...oraclePayload,
+      optionsSeriesId: '1',
+      optionsPositionId: '1',
       gate: 'gate'
     });
     const optionsIntent = buildSwapIntent({
@@ -156,11 +169,14 @@ describe('intent builders', () => {
       amountIn: '250',
       slippage: '0',
       perpsDirection: 'Long',
-      perpsPositionId: 'xor-usdt-main',
+      perpsPositionId: '1',
       perpsSize: '750',
-      optionsSeriesId: 'xor-usdt-apr',
-      optionsTicketId: 'ticket-001',
-      optionsContracts: '2',
+      optionsAction: 'buyShout',
+      optionsSeriesId: '2',
+      optionsPositionId: '1',
+      optionsNotional: '500',
+      optionsPremiumPaid: '25',
+      optionsCollateralLocked: '100',
       gate: 'gate'
     });
 
@@ -168,19 +184,20 @@ describe('intent builders', () => {
     expect(perpsIntent.contractAddress).toBe(perpsContractAddress);
     expect(perpsIntent.entrypoint).toBe('open_position');
     expect(perpsIntent.payload).toEqual({
-      trader: 'i105authority',
-      position: 'xor-usdt-main',
+      market_id: '1',
       size: '-750',
-      collateral: '250'
+      margin: '250',
+      requested_leverage_bps: '10000',
+      oracle_payload: ['10000', '10000', '0', '42', '43', '0', '7']
     });
-    expect(optionsIntent.contractKey).toBe('options.series_manager');
+    expect(optionsIntent.contractKey).toBe('options.factory');
     expect(optionsIntent.contractAddress).toBe(optionsContractAddress);
-    expect(optionsIntent.entrypoint).toBe('buy_option_sized');
+    expect(optionsIntent.entrypoint).toBe('buy_shout');
     expect(optionsIntent.payload).toEqual({
-      buyer: 'i105authority',
-      series: 'xor-usdt-apr',
-      ticket: 'ticket-001',
-      contracts: '2'
+      series_id: '2',
+      notional: '500',
+      premium_paid: '25',
+      collateral_locked: '100'
     });
   });
 
@@ -194,16 +211,21 @@ describe('intent builders', () => {
       amountIn: '250',
       slippage: '0',
       perpsDirection: 'Short',
-      perpsPositionId: 'xor-usdt-main',
+      perpsAction: 'open',
+      perpsMarketId: '1',
+      perpsPositionId: '1',
       perpsSize: '123456789012345678901234567890',
-      optionsSeriesId: 'xor-usdt-apr',
-      optionsTicketId: 'ticket-001',
+      perpsMargin: '250',
+      perpsLeverageBps: '10000',
+      ...oraclePayload,
+      optionsSeriesId: '1',
+      optionsPositionId: '1',
       gate: 'gate'
     });
 
     expect(intent.payload).toMatchObject({
       size: '-123456789012345678901234567890',
-      collateral: '250'
+      margin: '250'
     });
   });
 
@@ -219,7 +241,6 @@ describe('intent builders', () => {
     });
 
     expect(intent.payload).toEqual({
-      user: 'i105authority',
       usdt_in: '100',
       usdc_in: '0',
       kusd_in: '0'

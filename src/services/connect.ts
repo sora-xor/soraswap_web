@@ -16,6 +16,17 @@ const normalizeOptionalUri = (value: string | null | undefined) => {
   return trimmed ? trimmed : null;
 };
 
+export const shouldAllowInsecureConnectWebSocket = (baseUrl: string) => {
+  try {
+    const url = new URL(baseUrl);
+    if (url.protocol !== 'http:') return false;
+    const host = url.hostname.toLowerCase();
+    return host === 'localhost' || host === '127.0.0.1' || host === '[::1]';
+  } catch {
+    return false;
+  }
+};
+
 export const buildConnectWebSocketUrl = (
   baseUrl: string,
   sid: string,
@@ -72,4 +83,7 @@ export const openConnectWebSocket = (
   sid: string,
   token: string,
   role: 'app' | 'wallet'
-) => openConnectWebSocketBase(baseUrl, sid, token, role);
+) =>
+  openConnectWebSocketBase(baseUrl, sid, token, role, {
+    allowInsecure: shouldAllowInsecureConnectWebSocket(baseUrl),
+  });

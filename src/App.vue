@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import ConnectDrawer from '@/components/ConnectDrawer.vue';
+import IrohaConnectModal from '@/components/IrohaConnectModal.vue';
 import Layout from '@/components/Layout.vue';
 import CrosschainView from '@/components/views/CrosschainView.vue';
 import DefiView from '@/components/views/DefiView.vue';
@@ -66,6 +67,7 @@ const initialPath = typeof window !== 'undefined' ? getRoutePathFromLocation(win
 const routeState = ref<RouteState>(parseRoute(initialPath));
 const activeView = computed(() => routeState.value.view);
 const connectDrawerOpen = ref(false);
+const walletConnectOpen = ref(false);
 
 const toHistoryState = (state: RouteState): RouteState => ({
   view: state.view,
@@ -171,6 +173,7 @@ const connectResponse = ref<ConnectSessionResponse | null>(null);
 const connectBusy = ref(false);
 const connectError = ref<string | null>(null);
 const authorityPublicKeyHex = ref(safeGetItem(STORAGE_KEYS.authorityPublicKey) || '');
+let connectRequestGeneration = 0;
 
 watch(authorityPublicKeyHex, (next) => {
   safeSetItem(STORAGE_KEYS.authorityPublicKey, next.trim());
@@ -186,14 +189,16 @@ watch(
       runtimeConfig.value.connectAppUrl
     ] as const,
   () => {
+    connectRequestGeneration += 1;
     connectPreview.value = null;
     connectResponse.value = null;
     connectError.value = null;
+    connectBusy.value = false;
   }
 );
 
 const generateConnect = async () => {
-  connectDrawerOpen.value = true;
+  const generation = ++connectRequestGeneration;
   connectBusy.value = true;
   connectError.value = null;
   try {
@@ -206,14 +211,42 @@ const generateConnect = async () => {
       preview.sid,
       runtimeConfig.value.toriiUrl
     );
+    if (generation !== connectRequestGeneration) return;
     connectPreview.value = preview;
     connectResponse.value = response;
     liveConnect.start(preview, response);
   } catch (caught) {
+    if (generation !== connectRequestGeneration) return;
     connectError.value = caught instanceof Error ? caught.message : String(caught);
   } finally {
-    connectBusy.value = false;
+    if (generation === connectRequestGeneration) {
+      connectBusy.value = false;
+    }
   }
+};
+
+const needsFreshConnectSession = () => {
+  if (!connectPreview.value || !connectResponse.value) return true;
+  return liveConnect.state.phase === 'idle' || liveConnect.state.phase === 'closed' || liveConnect.state.phase === 'error' || liveConnect.state.phase === 'rejected';
+};
+
+const openWalletConnect = () => {
+  walletConnectOpen.value = true;
+  if (!connectBusy.value && needsFreshConnectSession()) {
+    void generateConnect();
+  }
+};
+
+const closeWalletConnect = () => {
+  walletConnectOpen.value = false;
+  if (liveConnect.state.phase === 'approved') return;
+
+  connectRequestGeneration += 1;
+  connectBusy.value = false;
+  connectError.value = null;
+  connectPreview.value = null;
+  connectResponse.value = null;
+  liveConnect.close(1000, 'connect modal closed');
 };
 
 const refreshAll = async () => {
@@ -364,6 +397,7 @@ watch(
   (next) => {
     if (next === 'approved') {
       connectDrawerOpen.value = false;
+      walletConnectOpen.value = false;
     }
   }
 );
@@ -379,7 +413,7 @@ watch(
     :theme="theme"
     :account-id="walletState.accountId"
     @change-view="changeView"
-    @request-connect="connectDrawerOpen = true"
+    @request-connect="openWalletConnect"
     @toggle-theme="theme = theme === 'night' ? 'paper' : 'night'"
     @refresh-runtime="refreshAll"
   >
@@ -390,7 +424,7 @@ watch(
           :account-state="walletState"
           :torii-url="runtimeConfig.toriiUrl"
           @navigate="changeView"
-          @open-connect="connectDrawerOpen = true"
+          @open-connect="openWalletConnect"
         />
         <DefiView
           v-else-if="activeView === 'defi'"
@@ -401,7 +435,7 @@ watch(
           :authority-account-id="walletState.accountId"
           :connect-ready="liveConnect.state.phase === 'approved'"
           :submit-draft-via-connect="submitDraftViaConnect"
-          @open-connect="connectDrawerOpen = true"
+          @open-connect="openWalletConnect"
         />
         <SwapView
           v-else-if="activeView === 'swap'"
@@ -416,7 +450,7 @@ watch(
           :wallet-assets="walletState.assets"
           :submit-draft-via-connect="submitDraftViaConnect"
           @update-route="({ swapFrom, swapTo, replace }) => changeView('swap', { swapFrom, swapTo }, replace)"
-          @open-connect="connectDrawerOpen = true"
+          @open-connect="openWalletConnect"
         />
         <LaunchpadView
           v-else-if="activeView === 'launchpad'"
@@ -428,7 +462,7 @@ watch(
           :connect-ready="liveConnect.state.phase === 'approved'"
           :submit-draft-via-connect="submitDraftViaConnect"
           @navigate="({ replace, ...meta }) => changeView('launchpad', { launchpadMode: meta.mode, launchpadId: meta.id }, replace)"
-          @open-connect="connectDrawerOpen = true"
+          @open-connect="openWalletConnect"
         />
         <CrosschainView
           v-else-if="activeView === 'crosschain'"
@@ -436,7 +470,7 @@ watch(
           :authority-account-id="walletState.accountId"
           :connect-ready="liveConnect.state.phase === 'approved'"
           :submit-bridge-proof-via-connect="submitBridgeProofViaConnect"
-          @open-connect="connectDrawerOpen = true"
+          @open-connect="openWalletConnect"
         />
         <MoreView
           v-else
@@ -461,7 +495,7 @@ watch(
           :registry-discovered-total="registryCoverage.discoveredTotal"
           :registry-verified-total="registryCoverage.verifiedTotal"
           :registry-missing-contract-addresses="registryCoverage.missingContractAddresses"
-          @generate-connect="generateConnect"
+          @generate-connect="openWalletConnect"
           @set-account="walletWatch.setAccountId"
           @clear-account="walletWatch.setAccountId(null)"
           @set-authority-public-key="authorityPublicKeyHex = $event"
@@ -474,6 +508,20 @@ watch(
       </div>
     </Transition>
   </Layout>
+
+  <IrohaConnectModal
+    :open="walletConnectOpen"
+    :account-id="walletState.accountId"
+    :connect-preview="connectPreview"
+    :connect-response="connectResponse"
+    :connect-busy="connectBusy"
+    :connect-error="connectError"
+    :live-connect="liveConnect.state"
+    :runtime-config="runtimeConfig"
+    @close="closeWalletConnect"
+    @generate-connect="generateConnect"
+    @set-account="walletWatch.setAccountId"
+  />
 
   <ConnectDrawer
     :open="connectDrawerOpen"

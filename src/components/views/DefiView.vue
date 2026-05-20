@@ -68,8 +68,15 @@ const n3xAmount = ref('250');
 const farmPosition = ref('');
 const farmAmount = ref('1000');
 const coverPolicy = ref('');
+const coverLowerBound = ref('9000');
+const coverUpperBound = ref('11000');
+const coverPayoutAmount = ref('100');
+const coverMonitoringWindowSlots = ref('100');
+const coverRequiredObservations = ref('3');
 const coverNotional = ref('1000');
-const coverRefundPercent = ref('50');
+const coverPremiumPaid = ref('10');
+const coverRegistrationSlot = ref('0');
+const coverCurrentSlot = ref('0');
 const automationJob = ref('job-001');
 const automationPayloadHash = ref('1');
 const automationNextSlot = ref('0');
@@ -180,7 +187,7 @@ const loadCoverPortfolio = async () => {
   try {
     const nextPolicies = await loadCoverPolicies(props.toriiUrl);
     coverPolicies.value = nextPolicies;
-    await ensureAssetMetadata(nextPolicies.map((policy) => policy.settlementAssetId));
+    await ensureAssetMetadata(nextPolicies.map((policy) => policy.settlementAssetId).filter(Boolean));
   } catch (caught) {
     coverPoliciesError.value = caught instanceof Error ? caught.message : String(caught);
   }
@@ -216,7 +223,31 @@ watch(
 );
 
 watch(
-  [operation, n3xUsdt, n3xUsdc, n3xKusd, n3xAmount, farmPosition, farmAmount, coverPolicy, coverNotional, coverRefundPercent, automationJob, automationPayloadHash, automationNextSlot, automationMaxRetries, automationRetryDelaySlots, () => props.authorityAccountId],
+  [
+    operation,
+    n3xUsdt,
+    n3xUsdc,
+    n3xKusd,
+    n3xAmount,
+    farmPosition,
+    farmAmount,
+    coverPolicy,
+    coverLowerBound,
+    coverUpperBound,
+    coverPayoutAmount,
+    coverMonitoringWindowSlots,
+    coverRequiredObservations,
+    coverNotional,
+    coverPremiumPaid,
+    coverRegistrationSlot,
+    coverCurrentSlot,
+    automationJob,
+    automationPayloadHash,
+    automationNextSlot,
+    automationMaxRetries,
+    automationRetryDelaySlots,
+    () => props.authorityAccountId
+  ],
   () => {
     resetExecutionState(true);
   }
@@ -274,9 +305,9 @@ const moduleActions: Record<(typeof moduleTabs)[number]['id'], Array<{ value: De
     { value: 'farm_claim', label: 'Claim' }
   ],
   cover: [
-    { value: 'cover_buy', label: 'Buy' },
+    { value: 'cover_register', label: 'Register' },
     { value: 'cover_claim', label: 'Claim' },
-    { value: 'cover_cancel', label: 'Cancel' }
+    { value: 'cover_expire', label: 'Expire' }
   ],
   automation: [
     { value: 'automation_enqueue', label: 'Enqueue' },
@@ -306,12 +337,12 @@ const activeOperationLabel = computed(() => {
       return 'farm stake';
     case 'farm_claim':
       return 'farm claim';
-    case 'cover_buy':
-      return 'cover buy';
+    case 'cover_register':
+      return 'cover register';
     case 'cover_claim':
       return 'cover claim';
-    case 'cover_cancel':
-      return 'cover cancel';
+    case 'cover_expire':
+      return 'cover expire';
     case 'automation_enqueue':
       return 'automation enqueue';
     case 'automation_configure':
@@ -337,12 +368,12 @@ const flowSummary = computed(() => {
       return 'Stake the configured farm asset into a live position from the same wallet session path as Swap.';
     case 'farm_claim':
       return 'Claim accrued rewards for an existing farm position without bouncing back into diagnostics.';
-    case 'cover_buy':
-      return 'Pick a live cover policy and size the covered notional directly from its deployed settlement asset.';
+    case 'cover_register':
+      return 'Register a new policy with explicit bounds, payout, window, and premium inputs.';
     case 'cover_claim':
       return 'Claim against an owned live policy using the current policy state and payout rules.';
-    case 'cover_cancel':
-      return 'Cancel a live policy by sending an explicit refund percentage instead of working from raw payloads only.';
+    case 'cover_expire':
+      return 'Expire an active policy at the current chain slot without routing a payout.';
     case 'automation_enqueue':
       return 'Queue a job for the selected owner account and keep the scheduling metadata in the same view.';
     case 'automation_configure':
@@ -415,9 +446,20 @@ const automationStatusLabel = (status: string) => {
   }
 };
 const coverStatusLabel = (policy: LiveCoverPolicy) => {
-  if (policy.active) return 'active';
-  if (policy.expired) return 'expired';
-  return 'inactive';
+  switch (policy.status) {
+    case '1':
+      return 'active';
+    case '2':
+      return 'breaching';
+    case '3':
+      return 'claimable';
+    case '4':
+      return 'claimed';
+    case '5':
+      return 'expired';
+    default:
+      return `status ${policy.status}`;
+  }
 };
 const useFarmSelectionCards = computed(() => farmPositions.value.length > 0);
 const useAutomationSelectionCards = computed(
@@ -524,26 +566,26 @@ const buildIntent = async () => {
       intentJson.value = JSON.stringify(intent.payload, null, 2);
       return intent;
     }
-    case 'cover_buy': {
-      if (!selectedCoverPolicy.value) {
-        throw new Error('Choose a live cover policy before preparing a buy.');
-      }
-      const policy = selectedCoverPolicy.value;
-      const settlementMeta = await resolveAssetDefinitionMetadata(props.toriiUrl, policy.settlementAssetId, 'Settlement asset');
-      const coveredNotional = scaleDecimalToBaseUnits(coverNotional.value, settlementMeta.scale ?? 0, 'Covered notional');
+    case 'cover_register': {
       const intent = buildDefiIntent({
-        kind: 'cover_buy',
+        kind: 'cover_register',
         authorityAccountId,
         dataspace: props.dataspace,
-        policy: policy.id,
-        coveredNotional,
+        lowerBound: coverLowerBound.value,
+        upperBound: coverUpperBound.value,
+        payoutAmount: coverPayoutAmount.value,
+        monitoringWindowSlots: coverMonitoringWindowSlots.value,
+        requiredObservations: coverRequiredObservations.value,
+        coveredNotional: coverNotional.value,
+        premiumPaid: coverPremiumPaid.value,
+        registrationSlot: coverRegistrationSlot.value,
         gate: props.writeGateReason
       });
       reviewItems.value = [
-        { label: 'Policy', value: policy.id },
-        { label: 'Settlement asset', value: settlementMeta.alias || settlementMeta.id },
-        { label: 'Premium', value: formatAssetQuantity(policy.premium, policy.settlementAssetId) },
-        { label: 'Covered notional', value: `${coverNotional.value} -> ${coveredNotional}` }
+        { label: 'Bounds', value: `${coverLowerBound.value} - ${coverUpperBound.value}` },
+        { label: 'Payout', value: coverPayoutAmount.value },
+        { label: 'Covered notional', value: coverNotional.value },
+        { label: 'Premium paid', value: coverPremiumPaid.value }
       ];
       intentJson.value = JSON.stringify(intent.payload, null, 2);
       return intent;
@@ -552,41 +594,36 @@ const buildIntent = async () => {
       if (!selectedCoverPolicy.value) {
         throw new Error('Choose a live cover policy before preparing a claim.');
       }
-      const policy = selectedCoverPolicy.value;
-      const settlementMeta = await resolveAssetDefinitionMetadata(props.toriiUrl, policy.settlementAssetId, 'Settlement asset');
-      const coveredNotional = scaleDecimalToBaseUnits(coverNotional.value, settlementMeta.scale ?? 0, 'Covered notional');
       const intent = buildDefiIntent({
         kind: 'cover_claim',
         authorityAccountId,
         dataspace: props.dataspace,
-        policy: policy.id,
-        coveredNotional,
-        gate: props.writeGateReason
-      });
-      reviewItems.value = [
-        { label: 'Policy', value: policy.id },
-        { label: 'Breach elapsed', value: policy.breachElapsed },
-        { label: 'Covered notional', value: `${coverNotional.value} -> ${coveredNotional}` }
-      ];
-      intentJson.value = JSON.stringify(intent.payload, null, 2);
-      return intent;
-    }
-    case 'cover_cancel': {
-      if (!selectedCoverPolicy.value) {
-        throw new Error('Choose a live cover policy before preparing a cancellation.');
-      }
-      const refundBps = scaleDecimalToBaseUnits(coverRefundPercent.value, 2, 'Refund %', { allowZero: true });
-      const intent = buildDefiIntent({
-        kind: 'cover_cancel',
-        authorityAccountId,
-        dataspace: props.dataspace,
-        policy: selectedCoverPolicy.value.id,
-        refundBps,
+        policyId: selectedCoverPolicy.value.id,
         gate: props.writeGateReason
       });
       reviewItems.value = [
         { label: 'Policy', value: selectedCoverPolicy.value.id },
-        { label: 'Refund %', value: `${coverRefundPercent.value}% -> ${refundBps} bps` }
+        { label: 'Breach elapsed', value: selectedCoverPolicy.value.breachElapsed },
+        { label: 'Claim payout', value: selectedCoverPolicy.value.claimPayout }
+      ];
+      intentJson.value = JSON.stringify(intent.payload, null, 2);
+      return intent;
+    }
+    case 'cover_expire': {
+      if (!selectedCoverPolicy.value) {
+        throw new Error('Choose a live cover policy before preparing an expiry.');
+      }
+      const intent = buildDefiIntent({
+        kind: 'cover_expire',
+        authorityAccountId,
+        dataspace: props.dataspace,
+        policyId: selectedCoverPolicy.value.id,
+        currentSlot: coverCurrentSlot.value || String(currentSlot.value ?? 0),
+        gate: props.writeGateReason
+      });
+      reviewItems.value = [
+        { label: 'Policy', value: selectedCoverPolicy.value.id },
+        { label: 'Current slot', value: coverCurrentSlot.value || String(currentSlot.value ?? 0) }
       ];
       intentJson.value = JSON.stringify(intent.payload, null, 2);
       return intent;
@@ -958,17 +995,47 @@ const selectAutomationJob = (jobId: string) => {
           </template>
 
           <template v-else-if="operation.startsWith('cover')">
-            <label class="field">
+            <label v-if="operation !== 'cover_register'" class="field">
               <span>Selected policy</span>
               <input :value="coverPolicy || 'Choose from live policies'" class="input mono" readonly />
             </label>
-            <label v-if="operation !== 'cover_cancel'" class="field">
+            <template v-if="operation === 'cover_register'">
+              <label class="field">
+                <span>Lower bound</span>
+                <input v-model="coverLowerBound" class="input mono" inputmode="numeric" />
+              </label>
+              <label class="field">
+                <span>Upper bound</span>
+                <input v-model="coverUpperBound" class="input mono" inputmode="numeric" />
+              </label>
+              <label class="field">
+                <span>Payout amount</span>
+                <input v-model="coverPayoutAmount" class="input mono" inputmode="numeric" />
+              </label>
+              <label class="field">
+                <span>Window slots</span>
+                <input v-model="coverMonitoringWindowSlots" class="input mono" inputmode="numeric" />
+              </label>
+              <label class="field">
+                <span>Required observations</span>
+                <input v-model="coverRequiredObservations" class="input mono" inputmode="numeric" />
+              </label>
+            </template>
+            <label v-if="operation === 'cover_register'" class="field">
               <span>Covered notional</span>
               <input v-model="coverNotional" class="input" inputmode="decimal" />
             </label>
-            <label v-else class="field">
-              <span>Refund %</span>
-              <input v-model="coverRefundPercent" class="input" inputmode="decimal" />
+            <label v-if="operation === 'cover_register'" class="field">
+              <span>Premium paid</span>
+              <input v-model="coverPremiumPaid" class="input" inputmode="decimal" />
+            </label>
+            <label v-if="operation === 'cover_register'" class="field">
+              <span>Registration slot</span>
+              <input v-model="coverRegistrationSlot" class="input mono" inputmode="numeric" />
+            </label>
+            <label v-if="operation === 'cover_expire'" class="field">
+              <span>Current slot</span>
+              <input v-model="coverCurrentSlot" class="input mono" inputmode="numeric" />
             </label>
           </template>
 
@@ -1120,24 +1187,28 @@ const selectAutomationJob = (jobId: string) => {
               <span class="market-list__route">{{ coverStatusLabel(policy) }}</span>
             </div>
             <div class="market-list__stats">
-              <strong>{{ formatAssetQuantity(policy.premium, policy.settlementAssetId) }}</strong>
-              <span>{{ assetLabel(policy.settlementAssetId) }}</span>
+              <strong>{{ policy.premiumPaid }} premium</strong>
+              <span>{{ policy.coveredNotional }} notional</span>
             </div>
           </button>
         </div>
 
         <div v-if="activeModuleId === 'cover' && selectedCoverPolicy" class="summary-list">
           <div>
-            <span>Settlement asset</span>
-            <strong>{{ assetLabel(selectedCoverPolicy.settlementAssetId) }}</strong>
+            <span>Bounds</span>
+            <strong>{{ selectedCoverPolicy.lowerBound }} - {{ selectedCoverPolicy.upperBound }}</strong>
           </div>
           <div>
             <span>Premium</span>
-            <strong>{{ formatAssetQuantity(selectedCoverPolicy.premium, selectedCoverPolicy.settlementAssetId) }}</strong>
+            <strong>{{ selectedCoverPolicy.premiumPaid }}</strong>
           </div>
           <div>
-            <span>Payout bps</span>
-            <strong>{{ selectedCoverPolicy.payoutBps }}</strong>
+            <span>Payout</span>
+            <strong>{{ selectedCoverPolicy.payoutAmount }}</strong>
+          </div>
+          <div>
+            <span>Observations</span>
+            <strong>{{ selectedCoverPolicy.observationCount }}/{{ selectedCoverPolicy.requiredObservations }}</strong>
           </div>
           <div>
             <span>Status</span>

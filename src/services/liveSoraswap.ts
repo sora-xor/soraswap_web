@@ -90,10 +90,16 @@ export const loadLaunchpadSales = async (baseUrl: string): Promise<LiveLaunchpad
     paymentAsset,
     treasury,
     unitPrice,
+    softCap,
     hardCap,
     raised,
     sold,
+    seedInventory,
+    seededPaymentUsed,
+    seededSaleUsed,
     claimInventory,
+    claimedSupply,
+    refundedPayment,
     closed,
     successful,
     seeded,
@@ -104,10 +110,16 @@ export const loadLaunchpadSales = async (baseUrl: string): Promise<LiveLaunchpad
     fetchLogicalMap(baseUrl, 'PaymentAsset'),
     fetchLogicalMap(baseUrl, 'Treasury'),
     fetchLogicalMap(baseUrl, 'UnitPrice'),
+    fetchLogicalMap(baseUrl, 'SoftCap'),
     fetchLogicalMap(baseUrl, 'HardCap'),
     fetchLogicalMap(baseUrl, 'Raised'),
     fetchLogicalMap(baseUrl, 'Sold'),
+    fetchLogicalMap(baseUrl, 'SeedInventory'),
+    fetchLogicalMap(baseUrl, 'SeedPaymentUsed'),
+    fetchLogicalMap(baseUrl, 'SeedSaleUsed'),
     fetchLogicalMap(baseUrl, 'ClaimInventory'),
+    fetchLogicalMap(baseUrl, 'ClaimedSupply'),
+    fetchLogicalMap(baseUrl, 'RefundedPayment'),
     fetchLogicalMap(baseUrl, 'Closed'),
     fetchLogicalMap(baseUrl, 'Successful'),
     fetchLogicalMap(baseUrl, 'Seeded'),
@@ -121,10 +133,16 @@ export const loadLaunchpadSales = async (baseUrl: string): Promise<LiveLaunchpad
     paymentAssetId: normalizeStringLike(paymentAsset.get(id)) || '',
     treasuryAccountId: normalizeStringLike(treasury.get(id)),
     unitPrice: normalizeNumberLike(unitPrice.get(id)),
+    softCap: normalizeNumberLike(softCap.get(id)),
     hardCap: normalizeNumberLike(hardCap.get(id)),
     raised: normalizeNumberLike(raised.get(id)),
     sold: normalizeNumberLike(sold.get(id)),
+    seedInventory: normalizeNumberLike(seedInventory.get(id)),
+    seededPaymentUsed: normalizeNumberLike(seededPaymentUsed.get(id)),
+    seededSaleUsed: normalizeNumberLike(seededSaleUsed.get(id)),
     claimInventory: normalizeNumberLike(claimInventory.get(id)),
+    claimedSupply: normalizeNumberLike(claimedSupply.get(id)),
+    refundedPayment: normalizeNumberLike(refundedPayment.get(id)),
     closed: normalizeFlag(closed.get(id)),
     successful: normalizeFlag(successful.get(id)),
     seeded: normalizeFlag(seeded.get(id)),
@@ -173,47 +191,60 @@ export const loadLaunchpadAllocations = async (
 export const loadOptionSeries = async (baseUrl: string): Promise<LiveOptionSeries[]> => {
   const [
     underlyingAsset,
-    settlementAsset,
-    treasury,
-    strikePrice,
-    premium,
+    quoteAsset,
+    managerStatus,
+    factoryKind,
+    maxNotional,
+    premiumBps,
+    strikeBps,
+    collateralMultiplierBps,
     expirySlot,
-    active,
-    ticketsIssued,
-    ticketsExercised,
-    ticketsVoided,
-    collateralInventory,
-    collateralReserved
+    openNotional,
+    utilisationBps,
+    settlementReady
   ] = await Promise.all([
-    fetchLogicalMap(baseUrl, 'UnderlyingAsset'),
-    fetchLogicalMap(baseUrl, 'SettlementAsset'),
-    fetchLogicalMap(baseUrl, 'Treasury'),
-    fetchLogicalMap(baseUrl, 'StrikePrice'),
-    fetchLogicalMap(baseUrl, 'Premium'),
-    fetchLogicalMap(baseUrl, 'SeriesExpirySlot'),
-    fetchLogicalMap(baseUrl, 'SeriesActive'),
-    fetchLogicalMap(baseUrl, 'TicketsIssued'),
-    fetchLogicalMap(baseUrl, 'TicketsExercised'),
-    fetchLogicalMap(baseUrl, 'TicketsVoided'),
-    fetchLogicalMap(baseUrl, 'SeriesCollateralInventory'),
-    fetchLogicalMap(baseUrl, 'SeriesCollateralReserved')
+    fetchLogicalMap(baseUrl, 'OptMgrSeriesUnderlyingAsset'),
+    fetchLogicalMap(baseUrl, 'OptMgrSeriesQuoteAsset'),
+    fetchLogicalMap(baseUrl, 'OptMgrSeriesStatus'),
+    fetchLogicalMap(baseUrl, 'OptFactorySeriesKind'),
+    fetchLogicalMap(baseUrl, 'OptFactorySeriesMaxNotional'),
+    fetchLogicalMap(baseUrl, 'OptFactorySeriesPremiumBps'),
+    fetchLogicalMap(baseUrl, 'OptFactorySeriesStrikeBps'),
+    fetchLogicalMap(baseUrl, 'OptFactorySeriesCollateralMultiplierBps'),
+    fetchLogicalMap(baseUrl, 'OptFactorySeriesExpirySlot'),
+    fetchLogicalMap(baseUrl, 'OptFactorySeriesOpenNotional'),
+    fetchLogicalMap(baseUrl, 'OptFactorySeriesUtilisationBps'),
+    fetchLogicalMap(baseUrl, 'OptFactorySeriesSettlementReady')
   ]);
 
-  const series = Array.from(underlyingAsset.keys()).map((id) => ({
+  const seriesIds = new Set([...underlyingAsset.keys(), ...factoryKind.keys()]);
+  const series = Array.from(seriesIds).map((id) => {
+    const status = normalizeNumberLike(managerStatus.get(id), normalizeFlag(factoryKind.get(id)) ? '1' : '0');
+    const active = status === '1';
+    const notional = normalizeNumberLike(openNotional.get(id));
+    return {
     id,
     underlyingAssetId: normalizeStringLike(underlyingAsset.get(id)) || '',
-    settlementAssetId: normalizeStringLike(settlementAsset.get(id)) || '',
-    treasuryAccountId: normalizeStringLike(treasury.get(id)),
-    strikePrice: normalizeNumberLike(strikePrice.get(id)),
-    premium: normalizeNumberLike(premium.get(id)),
+      settlementAssetId: normalizeStringLike(quoteAsset.get(id)) || '',
+      treasuryAccountId: null,
+      kind: normalizeNumberLike(factoryKind.get(id)),
+      maxNotional: normalizeNumberLike(maxNotional.get(id)),
+      openNotional: notional,
+      utilisationBps: normalizeNumberLike(utilisationBps.get(id)),
+      collateralMultiplierBps: normalizeNumberLike(collateralMultiplierBps.get(id)),
+      status,
+      settlementReady: normalizeFlag(settlementReady.get(id)),
+      strikePrice: normalizeNumberLike(strikeBps.get(id)),
+      premium: normalizeNumberLike(premiumBps.get(id)),
     expirySlot: normalizeNumberLike(expirySlot.get(id)),
-    active: normalizeFlag(active.get(id)),
-    ticketsIssued: normalizeNumberLike(ticketsIssued.get(id)),
-    ticketsExercised: normalizeNumberLike(ticketsExercised.get(id)),
-    ticketsVoided: normalizeNumberLike(ticketsVoided.get(id)),
-    collateralInventory: normalizeNumberLike(collateralInventory.get(id)),
-    collateralReserved: normalizeNumberLike(collateralReserved.get(id))
-  }));
+      active,
+      ticketsIssued: notional,
+      ticketsExercised: '0',
+      ticketsVoided: '0',
+      collateralInventory: '0',
+      collateralReserved: normalizeNumberLike(openNotional.get(id))
+    };
+  });
 
   return sortByKey(series);
 };
@@ -223,35 +254,51 @@ export const loadOptionTickets = async (
   ownerAccountId: string
 ): Promise<LiveOptionTicket[]> => {
   const [
-    ticketOwner,
-    ticketSeries,
-    ticketActive,
-    ticketPremiumPaid,
-    ticketContracts,
-    ticketCollateralReserved,
-    ticketPayoutPaid
+    positionOwner,
+    positionSeries,
+    positionKind,
+    positionNotional,
+    positionPremiumPaid,
+    positionCollateralLocked,
+    positionStatus,
+    positionRecordedPayout,
+    positionSettlementReady
   ] = await Promise.all([
-    fetchLogicalMap(baseUrl, 'TicketOwner'),
-    fetchLogicalMap(baseUrl, 'TicketSeries'),
-    fetchLogicalMap(baseUrl, 'TicketActive'),
-    fetchLogicalMap(baseUrl, 'TicketPremiumPaid'),
-    fetchLogicalMap(baseUrl, 'TicketContracts'),
-    fetchLogicalMap(baseUrl, 'TicketCollateralReserved'),
-    fetchLogicalMap(baseUrl, 'TicketPayoutPaid')
+    fetchLogicalMap(baseUrl, 'OptFactoryPositionOwner'),
+    fetchLogicalMap(baseUrl, 'OptFactoryPositionSeriesId'),
+    fetchLogicalMap(baseUrl, 'OptFactoryPositionKind'),
+    fetchLogicalMap(baseUrl, 'OptFactoryPositionNotional'),
+    fetchLogicalMap(baseUrl, 'OptFactoryPositionPremiumPaid'),
+    fetchLogicalMap(baseUrl, 'OptFactoryPositionCollateralLocked'),
+    fetchLogicalMap(baseUrl, 'OptFactoryPositionStatus'),
+    fetchLogicalMap(baseUrl, 'OptFactoryPositionRecordedPayout'),
+    fetchLogicalMap(baseUrl, 'OptFactoryPositionSettlementReady')
   ]);
 
-  const tickets = Array.from(ticketOwner.entries())
+  const tickets = Array.from(positionOwner.entries())
     .filter(([, owner]) => normalizeStringLike(owner) === ownerAccountId)
-    .map(([id, owner]) => ({
+    .map(([id, owner]) => {
+      const status = normalizeNumberLike(positionStatus.get(id));
+      const notional = normalizeNumberLike(positionNotional.get(id));
+      const collateralLocked = normalizeNumberLike(positionCollateralLocked.get(id));
+      const recordedPayout = normalizeNumberLike(positionRecordedPayout.get(id));
+      return {
       id,
       ownerAccountId: normalizeStringLike(owner) || ownerAccountId,
-      seriesId: normalizeStringLike(ticketSeries.get(id)) || '',
-      active: normalizeFlag(ticketActive.get(id)),
-      premiumPaid: normalizeNumberLike(ticketPremiumPaid.get(id)),
-      contracts: normalizeNumberLike(ticketContracts.get(id)),
-      collateralReserved: normalizeNumberLike(ticketCollateralReserved.get(id)),
-      payoutPaid: normalizeNumberLike(ticketPayoutPaid.get(id))
-    }));
+        seriesId: normalizeNumberLike(positionSeries.get(id)),
+        kind: normalizeNumberLike(positionKind.get(id)),
+        status,
+        active: status === '1',
+        premiumPaid: normalizeNumberLike(positionPremiumPaid.get(id)),
+        contracts: notional,
+        notional,
+        collateralReserved: collateralLocked,
+        collateralLocked,
+        payoutPaid: recordedPayout,
+        recordedPayout,
+        settlementReady: normalizeFlag(positionSettlementReady.get(id))
+      };
+    });
 
   return sortByKey(tickets);
 };
@@ -262,40 +309,55 @@ export const loadPerpsPositions = async (
 ): Promise<LivePerpsPosition[]> => {
   const [
     positionOwner,
+    positionMarketId,
     positionSize,
-    positionCollateral,
+    positionMargin,
     entryPrice,
     markPrice,
     indexPrice,
     fundingAccrued,
     realizedPnl,
-    liquidated
+    status,
+    activeSlot,
+    queuedSlot
   ] = await Promise.all([
-    fetchLogicalMap(baseUrl, 'PositionOwner'),
-    fetchLogicalMap(baseUrl, 'PositionSize'),
-    fetchLogicalMap(baseUrl, 'PositionCollateral'),
-    fetchLogicalMap(baseUrl, 'PositionEntryPrice'),
-    fetchLogicalMap(baseUrl, 'PositionMarkPrice'),
-    fetchLogicalMap(baseUrl, 'PositionIndexPrice'),
-    fetchLogicalMap(baseUrl, 'FundingAccrued'),
-    fetchLogicalMap(baseUrl, 'RealizedPnl'),
-    fetchLogicalMap(baseUrl, 'Liquidated')
+    fetchLogicalMap(baseUrl, 'PerpsPositionOwner'),
+    fetchLogicalMap(baseUrl, 'PerpsPositionMarketId'),
+    fetchLogicalMap(baseUrl, 'PerpsPositionSize'),
+    fetchLogicalMap(baseUrl, 'PerpsPositionMargin'),
+    fetchLogicalMap(baseUrl, 'PerpsPositionEntryPrice'),
+    fetchLogicalMap(baseUrl, 'PerpsPositionMarkPrice'),
+    fetchLogicalMap(baseUrl, 'PerpsPositionIndexPrice'),
+    fetchLogicalMap(baseUrl, 'PerpsPositionFundingAccrued'),
+    fetchLogicalMap(baseUrl, 'PerpsPositionRealizedPnl'),
+    fetchLogicalMap(baseUrl, 'PerpsPositionStatus'),
+    fetchLogicalMap(baseUrl, 'PerpsPositionActiveSlot'),
+    fetchLogicalMap(baseUrl, 'PerpsPositionQueuedSlot')
   ]);
 
   const positions = Array.from(positionOwner.entries())
     .filter(([, owner]) => normalizeStringLike(owner) === ownerAccountId)
-    .map(([id, owner]) => ({
+    .map(([id, owner]) => {
+      const margin = normalizeNumberLike(positionMargin.get(id));
+      const positionStatus = normalizeNumberLike(status.get(id));
+      return {
       id,
       ownerAccountId: normalizeStringLike(owner) || ownerAccountId,
+        marketId: normalizeNumberLike(positionMarketId.get(id)),
       size: normalizeNumberLike(positionSize.get(id)),
-      collateral: normalizeNumberLike(positionCollateral.get(id)),
+        collateral: margin,
+        margin,
       entryPrice: normalizeNumberLike(entryPrice.get(id)),
       markPrice: normalizeNumberLike(markPrice.get(id)),
       indexPrice: normalizeNumberLike(indexPrice.get(id)),
       fundingAccrued: normalizeNumberLike(fundingAccrued.get(id)),
       realizedPnl: normalizeNumberLike(realizedPnl.get(id)),
-      liquidated: normalizeFlag(liquidated.get(id))
-    }));
+        status: positionStatus,
+        activeSlot: normalizeNumberLike(activeSlot.get(id)),
+        queuedSlot: normalizeNumberLike(queuedSlot.get(id)),
+        liquidated: positionStatus === '4'
+      };
+    });
 
   return sortByKey(positions);
 };
@@ -326,51 +388,75 @@ export const loadFarmPositions = async (
 
 export const loadCoverPolicies = async (baseUrl: string): Promise<LiveCoverPolicy[]> => {
   const [
-    settlementAsset,
-    vaultAccount,
     policyOwner,
-    durationSlots,
-    payoutBps,
-    premium,
-    notional,
+    lowerBound,
+    upperBound,
+    payoutAmount,
+    monitoringWindowSlots,
+    requiredObservations,
+    coveredNotional,
     premiumPaid,
+    status,
+    registrationSlot,
     breachElapsed,
+    observationCount,
+    lastObservationSlot,
+    lastObservedPrice,
     claimPayout,
-    claimCount,
-    active,
-    expired
+    claimCount
   ] = await Promise.all([
-    fetchLogicalMap(baseUrl, 'SettlementAsset'),
-    fetchLogicalMap(baseUrl, 'VaultAccount'),
-    fetchLogicalMap(baseUrl, 'PolicyOwner'),
-    fetchLogicalMap(baseUrl, 'DurationSlots'),
-    fetchLogicalMap(baseUrl, 'PayoutBps'),
-    fetchLogicalMap(baseUrl, 'Premium'),
-    fetchLogicalMap(baseUrl, 'PolicyNotional'),
-    fetchLogicalMap(baseUrl, 'PremiumPaid'),
-    fetchLogicalMap(baseUrl, 'BreachElapsed'),
-    fetchLogicalMap(baseUrl, 'ClaimPayout'),
-    fetchLogicalMap(baseUrl, 'ClaimCount'),
-    fetchLogicalMap(baseUrl, 'Active'),
-    fetchLogicalMap(baseUrl, 'Expired')
+    fetchLogicalMap(baseUrl, 'CoverPolicyOwner'),
+    fetchLogicalMap(baseUrl, 'CoverPolicyLowerBound'),
+    fetchLogicalMap(baseUrl, 'CoverPolicyUpperBound'),
+    fetchLogicalMap(baseUrl, 'CoverPolicyPayoutAmount'),
+    fetchLogicalMap(baseUrl, 'CoverPolicyMonitoringWindowSlots'),
+    fetchLogicalMap(baseUrl, 'CoverPolicyRequiredObservations'),
+    fetchLogicalMap(baseUrl, 'CoverPolicyCoveredNotional'),
+    fetchLogicalMap(baseUrl, 'CoverPolicyPremiumPaid'),
+    fetchLogicalMap(baseUrl, 'CoverPolicyStatus'),
+    fetchLogicalMap(baseUrl, 'CoverPolicyRegistrationSlot'),
+    fetchLogicalMap(baseUrl, 'CoverPolicyBreachElapsedSlots'),
+    fetchLogicalMap(baseUrl, 'CoverPolicyObservationCount'),
+    fetchLogicalMap(baseUrl, 'CoverPolicyLastObservationSlot'),
+    fetchLogicalMap(baseUrl, 'CoverPolicyLastObservedPrice'),
+    fetchLogicalMap(baseUrl, 'CoverPolicyClaimPayout'),
+    fetchLogicalMap(baseUrl, 'CoverPolicyClaimCount')
   ]);
 
-  const policies = Array.from(settlementAsset.keys()).map((id) => ({
+  const policies = Array.from(policyOwner.keys()).map((id) => {
+    const policyStatus = normalizeNumberLike(status.get(id));
+    const covered = normalizeNumberLike(coveredNotional.get(id));
+    const monitoringWindow = normalizeNumberLike(monitoringWindowSlots.get(id));
+    const payout = normalizeNumberLike(payoutAmount.get(id));
+    const premium = normalizeNumberLike(premiumPaid.get(id));
+    return {
     id,
-    settlementAssetId: normalizeStringLike(settlementAsset.get(id)) || '',
-    vaultAccountId: normalizeStringLike(vaultAccount.get(id)),
+      settlementAssetId: '',
+      vaultAccountId: null,
     ownerAccountId: normalizeStringLike(policyOwner.get(id)),
-    durationSlots: normalizeNumberLike(durationSlots.get(id)),
-    payoutBps: normalizeNumberLike(payoutBps.get(id)),
-    premium: normalizeNumberLike(premium.get(id)),
-    notional: normalizeNumberLike(notional.get(id)),
-    premiumPaid: normalizeNumberLike(premiumPaid.get(id)),
+      lowerBound: normalizeNumberLike(lowerBound.get(id)),
+      upperBound: normalizeNumberLike(upperBound.get(id)),
+      payoutAmount: payout,
+      durationSlots: monitoringWindow,
+      monitoringWindowSlots: monitoringWindow,
+      requiredObservations: normalizeNumberLike(requiredObservations.get(id)),
+      payoutBps: '0',
+      premium,
+      notional: covered,
+      coveredNotional: covered,
+      premiumPaid: premium,
+      registrationSlot: normalizeNumberLike(registrationSlot.get(id)),
     breachElapsed: normalizeNumberLike(breachElapsed.get(id)),
+      observationCount: normalizeNumberLike(observationCount.get(id)),
+      lastObservationSlot: normalizeNumberLike(lastObservationSlot.get(id)),
+      lastObservedPrice: normalizeNumberLike(lastObservedPrice.get(id)),
     claimPayout: normalizeNumberLike(claimPayout.get(id)),
     claimCount: normalizeNumberLike(claimCount.get(id)),
-    active: normalizeFlag(active.get(id)),
-    expired: normalizeFlag(expired.get(id))
-  }));
+      status: policyStatus,
+      active: policyStatus === '1' || policyStatus === '2' || policyStatus === '3',
+      expired: policyStatus === '5'
+    };
+  });
 
   return sortByKey(policies);
 };

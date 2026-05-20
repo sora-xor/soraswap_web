@@ -333,6 +333,8 @@ export interface ConnectSessionResponse {
   app_uri: string;
   token_app: string;
   token_wallet: string;
+  token_management?: string;
+  token_relay?: string;
   extra?: Record<string, unknown>;
   raw?: Record<string, unknown>;
 }
@@ -671,10 +673,16 @@ export interface LiveLaunchpadSale {
   paymentAssetId: string;
   treasuryAccountId: string | null;
   unitPrice: string;
+  softCap: string;
   hardCap: string;
   raised: string;
   sold: string;
+  seedInventory: string;
+  seededPaymentUsed: string;
+  seededSaleUsed: string;
   claimInventory: string;
+  claimedSupply: string;
+  refundedPayment: string;
   closed: boolean;
   successful: boolean;
   seeded: boolean;
@@ -697,6 +705,13 @@ export interface LiveOptionSeries {
   underlyingAssetId: string;
   settlementAssetId: string;
   treasuryAccountId: string | null;
+  kind: string;
+  maxNotional: string;
+  openNotional: string;
+  utilisationBps: string;
+  collateralMultiplierBps: string;
+  status: string;
+  settlementReady: boolean;
   strikePrice: string;
   premium: string;
   expirySlot: string;
@@ -712,23 +727,34 @@ export interface LiveOptionTicket {
   id: string;
   ownerAccountId: string;
   seriesId: string;
+  kind: string;
+  status: string;
   active: boolean;
   premiumPaid: string;
   contracts: string;
+  notional: string;
   collateralReserved: string;
+  collateralLocked: string;
   payoutPaid: string;
+  recordedPayout: string;
+  settlementReady: boolean;
 }
 
 export interface LivePerpsPosition {
   id: string;
   ownerAccountId: string;
+  marketId: string;
   size: string;
   collateral: string;
+  margin: string;
   entryPrice: string;
   markPrice: string;
   indexPrice: string;
   fundingAccrued: string;
   realizedPnl: string;
+  status: string;
+  queuedSlot: string;
+  activeSlot: string;
   liquidated: boolean;
 }
 
@@ -745,14 +771,25 @@ export interface LiveCoverPolicy {
   settlementAssetId: string;
   vaultAccountId: string | null;
   ownerAccountId: string | null;
+  lowerBound: string;
+  upperBound: string;
+  payoutAmount: string;
   durationSlots: string;
+  monitoringWindowSlots: string;
+  requiredObservations: string;
   payoutBps: string;
   premium: string;
   notional: string;
+  coveredNotional: string;
   premiumPaid: string;
+  registrationSlot: string;
   breachElapsed: string;
+  observationCount: string;
+  lastObservationSlot: string;
+  lastObservedPrice: string;
   claimPayout: string;
   claimCount: string;
+  status: string;
   active: boolean;
   expired: boolean;
 }

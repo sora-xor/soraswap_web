@@ -119,15 +119,29 @@ const mode = ref<TradeMode>(resolveStoredMode());
 const amountIn = ref('100');
 const slippage = ref('0.50');
 const perpsDirection = ref<'Long' | 'Short'>('Long');
-const perpsAction = ref<'open' | 'addCollateral' | 'removeCollateral' | 'closeMarked' | 'liquidateMarked'>('open');
+const perpsAction = ref<'open' | 'modify' | 'addMargin' | 'removeMargin' | 'close' | 'syncFunding' | 'liquidationPass'>('open');
+const perpsMarketId = ref('1');
 const perpsPositionId = ref('');
 const perpsSize = ref('300');
+const perpsLeverageBps = ref('10000');
 const perpsMarkPrice = ref('10000');
-const optionsAction = ref<'buy' | 'exercise'>('buy');
+const perpsIndexPrice = ref('10000');
+const perpsConfidenceBps = ref('0');
+const perpsOracleSlot = ref('0');
+const perpsCurrentSlot = ref('0');
+const perpsStatusFlags = ref('0');
+const perpsAttestationHash = ref('0');
+const perpsMaxPositions = ref('10');
+const optionsAction = ref<'buyShout' | 'buyOutperformance' | 'exerciseShout' | 'exerciseOutperformance'>('buyShout');
 const optionsSeriesId = ref('');
-const optionsTicketId = ref('ticket-001');
+const optionsTicketId = ref('');
 const optionsContracts = ref('1');
 const optionsPayout = ref('0');
+const optionsMarkPrice = ref('10000');
+const optionsOracleSlot = ref('0');
+const optionsCurrentSlot = ref('0');
+const optionsStatusFlags = ref('0');
+const optionsAttestationHash = ref('0');
 const pickerTarget = ref<PickerTarget>(null);
 const pickerSearch = ref('');
 const favoriteTokens = ref<TokenSymbol[]>(
@@ -323,14 +337,28 @@ watch(
     slippage,
     perpsDirection,
     perpsAction,
+    perpsMarketId,
     perpsPositionId,
     perpsSize,
+    perpsLeverageBps,
     perpsMarkPrice,
+    perpsIndexPrice,
+    perpsConfidenceBps,
+    perpsOracleSlot,
+    perpsCurrentSlot,
+    perpsStatusFlags,
+    perpsAttestationHash,
+    perpsMaxPositions,
     optionsAction,
     optionsSeriesId,
     optionsTicketId,
     optionsContracts,
     optionsPayout,
+    optionsMarkPrice,
+    optionsOracleSlot,
+    optionsCurrentSlot,
+    optionsStatusFlags,
+    optionsAttestationHash,
     () => props.authorityAccountId
   ],
   () => {
@@ -558,7 +586,7 @@ watch(
 watch(
   liveOptionTickets,
   (tickets) => {
-    if (optionsAction.value === 'exercise' && tickets.length && !tickets.some((ticket) => ticket.id === optionsTicketId.value)) {
+    if (optionsAction.value.startsWith('exercise') && tickets.length && !tickets.some((ticket) => ticket.id === optionsTicketId.value)) {
       optionsTicketId.value = tickets[0].id;
     }
   },
@@ -569,8 +597,14 @@ watch(
   [selectedPerpsPosition, perpsAction],
   ([position, action]) => {
     if (!position) return;
-    if ((action === 'closeMarked' || action === 'liquidateMarked') && !perpsMarkPrice.value) {
+    if (!perpsMarketId.value || perpsMarketId.value === '1') {
+      perpsMarketId.value = position.marketId || perpsMarketId.value;
+    }
+    if ((action === 'close' || action === 'removeMargin' || action === 'liquidationPass') && !perpsMarkPrice.value) {
       perpsMarkPrice.value = position.markPrice;
+    }
+    if (!perpsIndexPrice.value || perpsIndexPrice.value === '10000') {
+      perpsIndexPrice.value = position.indexPrice || perpsIndexPrice.value;
     }
   },
   { immediate: true }
@@ -580,7 +614,7 @@ watch(
   [selectedOptionsTicket, optionsAction],
   ([ticket, action]) => {
     if (!ticket) return;
-    if (action === 'exercise' && (!optionsPayout.value || optionsPayout.value === '0')) {
+    if (action.startsWith('exercise') && (!optionsPayout.value || optionsPayout.value === '0')) {
       optionsPayout.value = ticket.collateralReserved;
     }
   },
@@ -612,7 +646,7 @@ const tradeDeskTitle = computed(() => {
 });
 const tradePayLabel = computed(() => {
   if (mode.value === 'Perps') return 'Collateral';
-  if (mode.value === 'Options') return optionsAction.value === 'exercise' ? 'Ticket or premium' : 'Premium';
+  if (mode.value === 'Options') return optionsAction.value.startsWith('exercise') ? 'Position' : 'Premium';
   return 'You pay';
 });
 const tradeOutputHelper = computed(() => {
@@ -622,16 +656,16 @@ const tradeOutputHelper = computed(() => {
   if (mode.value === 'Perps') {
     return 'The selected position card and action state drive the payload.';
   }
-  return optionsAction.value === 'buy'
-    ? 'Live series cards set the contract context before you size the trade.'
-    : 'Owned ticket cards set the exercise context before you submit.';
+  return optionsAction.value.startsWith('buy')
+    ? 'Live factory series cards set the contract context before you size the trade.'
+    : 'Owned factory position cards set the exercise context before you submit.';
 });
 const modeSubtitle = computed(() => {
   switch (mode.value) {
     case 'Perps':
       return 'Open and manage live positions directly from the engine state instead of typing ad-hoc position ids.';
     case 'Options':
-      return 'Work from live series and owned tickets, then buy or exercise from the same trade surface.';
+      return 'Work from live factory series and owned positions, then buy or exercise from the same trade surface.';
     default:
       return 'Quote the live deployed DLMM pool, see balances immediately, and move through the next required step without guessing.';
   }
@@ -652,7 +686,7 @@ const marketSupportCopy = computed(() => {
   if (mode.value === 'Perps') {
     return 'Live position state comes from the perps engine, and the trade desk targets the selected position lifecycle step.';
   }
-  return 'Live series and owned tickets come from the options manager, so buy and exercise stay tied to on-chain state instead of manual ids.';
+  return 'Live series and owned positions come from the options factory, so buy and exercise stay tied to contract-assigned ids.';
 });
 const amountNumeric = computed(() => {
   const numeric = Number(amountIn.value);
@@ -750,13 +784,13 @@ const spotMinOutDisplay = computed(() => {
 const tradeOutputLabel = computed(() => {
   switch (mode.value) {
     case 'Perps':
-      return perpsAction.value === 'open'
+      return perpsAction.value === 'open' || perpsAction.value === 'modify'
         ? 'Position size'
-        : perpsAction.value === 'closeMarked' || perpsAction.value === 'liquidateMarked'
-          ? 'Mark price'
+        : perpsAction.value === 'close' || perpsAction.value === 'syncFunding' || perpsAction.value === 'liquidationPass'
+          ? 'Oracle mark'
           : 'Collateral delta';
     case 'Options':
-      return optionsAction.value === 'buy' ? 'Contracts' : 'Payout';
+      return optionsAction.value.startsWith('buy') ? 'Notional' : 'Oracle mark';
     default:
       return 'Estimated receive';
   }
@@ -764,13 +798,13 @@ const tradeOutputLabel = computed(() => {
 const tradeOutputValue = computed(() => {
   switch (mode.value) {
     case 'Perps':
-      return perpsAction.value === 'open'
+      return perpsAction.value === 'open' || perpsAction.value === 'modify'
         ? perpsSize.value || '--'
-        : perpsAction.value === 'closeMarked' || perpsAction.value === 'liquidateMarked'
+        : perpsAction.value === 'close' || perpsAction.value === 'syncFunding' || perpsAction.value === 'liquidationPass'
           ? perpsMarkPrice.value || '--'
           : amountIn.value || '--';
     case 'Options':
-      return optionsAction.value === 'buy' ? optionsContracts.value || '--' : optionsPayout.value || '--';
+      return optionsAction.value.startsWith('buy') ? optionsContracts.value || '--' : optionsMarkPrice.value || '--';
     default:
       return estimatedOutDisplay.value;
   }
@@ -842,7 +876,7 @@ const marketHighlights = computed(() => {
   }
   return [
     { label: 'Live series', value: String(liveOptionSeries.value.length) },
-    { label: 'Owned tickets', value: String(liveOptionTickets.value.length) },
+    { label: 'Owned positions', value: String(liveOptionTickets.value.length) },
     { label: 'Selected series', value: optionsSeriesId.value || '--' },
     { label: 'Premium', value: selectedOptionsSeries.value?.premium || '--' }
   ];
@@ -914,14 +948,30 @@ const buildIntentInput = () => ({
   slippage: String(spotMinOutBaseUnits.value ?? ''),
   perpsDirection: perpsDirection.value,
   perpsAction: perpsAction.value,
+  perpsMarketId: perpsMarketId.value,
   perpsPositionId: perpsPositionId.value,
   perpsSize: perpsSize.value,
-  perpsMarkPrice: perpsMarkPrice.value,
+  perpsMargin: amountIn.value,
+  perpsLeverageBps: perpsLeverageBps.value,
+  perpsMarkPriceBps: perpsMarkPrice.value,
+  perpsIndexPriceBps: perpsIndexPrice.value,
+  perpsConfidenceBps: perpsConfidenceBps.value,
+  perpsOracleSlot: perpsOracleSlot.value,
+  perpsCurrentSlot: perpsCurrentSlot.value,
+  perpsStatusFlags: perpsStatusFlags.value,
+  perpsAttestationHash: perpsAttestationHash.value,
+  perpsMaxPositions: perpsMaxPositions.value,
   optionsAction: optionsAction.value,
   optionsSeriesId: optionsSeriesId.value,
-  optionsTicketId: optionsTicketId.value,
-  optionsContracts: optionsContracts.value,
-  optionsPayout: optionsPayout.value,
+  optionsPositionId: optionsTicketId.value,
+  optionsNotional: optionsContracts.value,
+  optionsPremiumPaid: amountIn.value,
+  optionsCollateralLocked: optionsPayout.value,
+  optionsMarkPriceBps: optionsMarkPrice.value,
+  optionsOracleSlot: optionsOracleSlot.value,
+  optionsCurrentSlot: optionsCurrentSlot.value,
+  optionsStatusFlags: optionsStatusFlags.value,
+  optionsAttestationHash: optionsAttestationHash.value,
   gate: props.writeGateReason
 });
 
@@ -931,13 +981,14 @@ const buildIntent = async () => {
     let scaledIntentInput = { ...intentInput };
     if (mode.value === 'Perps') {
       const collateralMeta = tokenMetadata.value[payToken.value] || (await resolveTokenAssetMetadata(props.toriiUrl, payToken.value));
-      if (perpsAction.value === 'open' || perpsAction.value === 'addCollateral' || perpsAction.value === 'removeCollateral') {
+      if (perpsAction.value === 'open' || perpsAction.value === 'modify' || perpsAction.value === 'addMargin' || perpsAction.value === 'removeMargin') {
         scaledIntentInput = {
           ...scaledIntentInput,
-          amountIn: scaleDecimalToBaseUnits(amountIn.value, collateralMeta.scale ?? 0, `${payToken.value} collateral`)
+          amountIn: scaleDecimalToBaseUnits(amountIn.value, collateralMeta.scale ?? 0, `${payToken.value} collateral`),
+          perpsMargin: scaleDecimalToBaseUnits(amountIn.value, collateralMeta.scale ?? 0, `${payToken.value} margin`)
         };
       }
-      if (perpsAction.value === 'open') {
+      if (perpsAction.value === 'open' || perpsAction.value === 'modify') {
         const sizeScale = tokenMetadata.value[receiveToken.value]?.scale ?? 0;
         scaledIntentInput = {
           ...scaledIntentInput,
@@ -946,13 +997,17 @@ const buildIntent = async () => {
       }
     }
     if (mode.value === 'Options') {
-      if (optionsAction.value === 'exercise') {
-        const ticket = selectedOptionsTicket.value;
-        const series = liveOptionSeries.value.find((item) => item.id === ticket?.seriesId) || selectedOptionsSeries.value;
-        const settlementScale = series ? (await resolveAssetDefinitionMetadata(props.toriiUrl, series.settlementAssetId, 'Settlement asset')).scale ?? 0 : 0;
+      const series = liveOptionSeries.value.find((item) => item.id === selectedOptionsTicket.value?.seriesId) || selectedOptionsSeries.value;
+      const settlementScale = series?.settlementAssetId
+        ? (await resolveAssetDefinitionMetadata(props.toriiUrl, series.settlementAssetId, 'Settlement asset')).scale ?? 0
+        : 0;
+      if (optionsAction.value.startsWith('buy')) {
         scaledIntentInput = {
           ...scaledIntentInput,
-          optionsPayout: scaleDecimalToBaseUnits(optionsPayout.value, settlementScale, 'Payout', { allowZero: true })
+          amountIn: scaleDecimalToBaseUnits(amountIn.value, settlementScale, 'Premium'),
+          optionsPremiumPaid: scaleDecimalToBaseUnits(amountIn.value, settlementScale, 'Premium'),
+          optionsNotional: scaleDecimalToBaseUnits(optionsContracts.value, settlementScale, 'Notional'),
+          optionsCollateralLocked: scaleDecimalToBaseUnits(optionsPayout.value, settlementScale, 'Collateral locked')
         };
       }
     }
@@ -991,7 +1046,6 @@ const buildIntent = async () => {
     authorityAccountId: props.authorityAccountId,
     payAssetId: payAssetMeta.id,
     receiveAssetId: receiveAssetMeta.id,
-    spotVaultAccountId: poolConfig.vaultAccountId,
     spotBaseAssetId: poolConfig.baseAssetId,
     spotQuoteAssetId: poolConfig.quoteAssetId,
     amountIn: scaledAmountIn,
@@ -1093,26 +1147,28 @@ const handlePrimaryAction = async () => {
 
 const perpsActionTabs: Array<{ value: typeof perpsAction.value; label: string }> = [
   { value: 'open', label: 'Open' },
-  { value: 'addCollateral', label: 'Add collateral' },
-  { value: 'removeCollateral', label: 'Remove collateral' },
-  { value: 'closeMarked', label: 'Close' },
-  { value: 'liquidateMarked', label: 'Liquidate' }
+  { value: 'modify', label: 'Modify' },
+  { value: 'addMargin', label: 'Add margin' },
+  { value: 'removeMargin', label: 'Remove margin' },
+  { value: 'close', label: 'Close' },
+  { value: 'syncFunding', label: 'Funding' },
+  { value: 'liquidationPass', label: 'Liquidation' }
 ];
 
 const selectPerpsPosition = (positionId: string) => {
   perpsPositionId.value = positionId;
   if (perpsAction.value === 'open') {
-    perpsAction.value = 'addCollateral';
+    perpsAction.value = 'addMargin';
   }
 };
 
 const selectOptionsSeries = (seriesId: string) => {
-  optionsAction.value = 'buy';
+  optionsAction.value = 'buyShout';
   optionsSeriesId.value = seriesId;
 };
 
 const selectOptionsTicket = (ticketId: string) => {
-  optionsAction.value = 'exercise';
+  optionsAction.value = 'exerciseShout';
   optionsTicketId.value = ticketId;
   const ticket = liveOptionTickets.value.find((item) => item.id === ticketId);
   if (ticket?.seriesId) {
@@ -1298,18 +1354,63 @@ const selectOptionsTicket = (ticketId: string) => {
             </div>
 
             <label v-if="mode === 'Perps'" class="field">
+              <span>Market id</span>
+              <input v-model="perpsMarketId" class="input mono" inputmode="numeric" />
+            </label>
+
+            <label v-if="mode === 'Perps' && perpsAction !== 'open' && perpsAction !== 'syncFunding' && perpsAction !== 'liquidationPass'" class="field">
               <span>Selected position</span>
               <input :value="perpsPositionId || 'Choose from live positions'" class="input mono" readonly />
             </label>
 
-            <label v-if="mode === 'Perps' && perpsAction === 'open'" class="field">
+            <label v-if="mode === 'Perps' && (perpsAction === 'open' || perpsAction === 'modify')" class="field">
               <span>Position size</span>
               <input v-model="perpsSize" class="input" inputmode="decimal" />
             </label>
 
-            <label v-if="mode === 'Perps' && (perpsAction === 'closeMarked' || perpsAction === 'liquidateMarked')" class="field">
-              <span>Mark price</span>
+            <label v-if="mode === 'Perps' && (perpsAction === 'open' || perpsAction === 'modify')" class="field">
+              <span>Leverage bps</span>
+              <input v-model="perpsLeverageBps" class="input mono" inputmode="numeric" />
+            </label>
+
+            <label v-if="mode === 'Perps' && perpsAction === 'liquidationPass'" class="field">
+              <span>Max positions</span>
+              <input v-model="perpsMaxPositions" class="input mono" inputmode="numeric" />
+            </label>
+
+            <label v-if="mode === 'Perps' && perpsAction !== 'addMargin'" class="field">
+              <span>Oracle mark bps</span>
               <input v-model="perpsMarkPrice" class="input mono" inputmode="numeric" />
+            </label>
+
+            <label v-if="mode === 'Perps' && perpsAction !== 'addMargin'" class="field">
+              <span>Oracle index bps</span>
+              <input v-model="perpsIndexPrice" class="input mono" inputmode="numeric" />
+            </label>
+
+            <label v-if="mode === 'Perps' && perpsAction !== 'addMargin'" class="field">
+              <span>Confidence bps</span>
+              <input v-model="perpsConfidenceBps" class="input mono" inputmode="numeric" />
+            </label>
+
+            <label v-if="mode === 'Perps' && perpsAction !== 'addMargin'" class="field">
+              <span>Oracle slot</span>
+              <input v-model="perpsOracleSlot" class="input mono" inputmode="numeric" />
+            </label>
+
+            <label v-if="mode === 'Perps' && perpsAction !== 'addMargin'" class="field">
+              <span>Current slot</span>
+              <input v-model="perpsCurrentSlot" class="input mono" inputmode="numeric" />
+            </label>
+
+            <label v-if="mode === 'Perps' && perpsAction !== 'addMargin'" class="field">
+              <span>Status flags</span>
+              <input v-model="perpsStatusFlags" class="input mono" inputmode="numeric" />
+            </label>
+
+            <label v-if="mode === 'Perps' && perpsAction !== 'addMargin'" class="field">
+              <span>Attestation hash</span>
+              <input v-model="perpsAttestationHash" class="input mono" inputmode="numeric" />
             </label>
 
             <div v-if="mode === 'Options'" class="field">
@@ -1317,19 +1418,35 @@ const selectOptionsTicket = (ticketId: string) => {
               <div class="subtabs">
                 <button
                   class="subtab"
-                  :class="{ 'is-active': optionsAction === 'buy' }"
+                  :class="{ 'is-active': optionsAction === 'buyShout' }"
                   type="button"
-                  @click="optionsAction = 'buy'"
+                  @click="optionsAction = 'buyShout'"
                 >
-                  Buy
+                  Buy shout
                 </button>
                 <button
                   class="subtab"
-                  :class="{ 'is-active': optionsAction === 'exercise' }"
+                  :class="{ 'is-active': optionsAction === 'buyOutperformance' }"
                   type="button"
-                  @click="optionsAction = 'exercise'"
+                  @click="optionsAction = 'buyOutperformance'"
                 >
-                  Exercise
+                  Buy outperf
+                </button>
+                <button
+                  class="subtab"
+                  :class="{ 'is-active': optionsAction === 'exerciseShout' }"
+                  type="button"
+                  @click="optionsAction = 'exerciseShout'"
+                >
+                  Exercise shout
+                </button>
+                <button
+                  class="subtab"
+                  :class="{ 'is-active': optionsAction === 'exerciseOutperformance' }"
+                  type="button"
+                  @click="optionsAction = 'exerciseOutperformance'"
+                >
+                  Exercise outperf
                 </button>
               </div>
             </div>
@@ -1339,19 +1456,44 @@ const selectOptionsTicket = (ticketId: string) => {
               <input :value="optionsSeriesId || 'Choose from live series'" class="input mono" readonly />
             </label>
 
-            <label v-if="mode === 'Options' && optionsAction === 'exercise'" class="field">
-              <span>Ticket</span>
-              <input :value="optionsTicketId || 'Choose from owned tickets'" class="input mono" readonly />
+            <label v-if="mode === 'Options' && optionsAction.startsWith('exercise')" class="field">
+              <span>Position</span>
+              <input :value="optionsTicketId || 'Choose from owned positions'" class="input mono" readonly />
             </label>
 
-            <label v-if="mode === 'Options' && optionsAction === 'buy'" class="field">
-              <span>Contracts</span>
+            <label v-if="mode === 'Options' && optionsAction.startsWith('buy')" class="field">
+              <span>Notional</span>
               <input v-model="optionsContracts" class="input" inputmode="numeric" />
             </label>
 
-            <label v-if="mode === 'Options' && optionsAction === 'exercise'" class="field">
-              <span>Payout</span>
+            <label v-if="mode === 'Options' && optionsAction.startsWith('buy')" class="field">
+              <span>Collateral locked</span>
               <input v-model="optionsPayout" class="input" inputmode="decimal" />
+            </label>
+
+            <label v-if="mode === 'Options' && optionsAction === 'exerciseShout'" class="field">
+              <span>Oracle mark bps</span>
+              <input v-model="optionsMarkPrice" class="input mono" inputmode="numeric" />
+            </label>
+
+            <label v-if="mode === 'Options' && optionsAction === 'exerciseShout'" class="field">
+              <span>Oracle slot</span>
+              <input v-model="optionsOracleSlot" class="input mono" inputmode="numeric" />
+            </label>
+
+            <label v-if="mode === 'Options' && optionsAction === 'exerciseShout'" class="field">
+              <span>Current slot</span>
+              <input v-model="optionsCurrentSlot" class="input mono" inputmode="numeric" />
+            </label>
+
+            <label v-if="mode === 'Options' && optionsAction === 'exerciseShout'" class="field">
+              <span>Status flags</span>
+              <input v-model="optionsStatusFlags" class="input mono" inputmode="numeric" />
+            </label>
+
+            <label v-if="mode === 'Options' && optionsAction === 'exerciseShout'" class="field">
+              <span>Attestation hash</span>
+              <input v-model="optionsAttestationHash" class="input mono" inputmode="numeric" />
             </label>
           </div>
         </div>
@@ -1465,7 +1607,7 @@ const selectOptionsTicket = (ticketId: string) => {
             v-for="series in mode === 'Options' ? liveOptionSeries : []"
             :key="series.id"
             class="market-list__item"
-            :class="{ 'is-active': series.id === optionsSeriesId && optionsAction === 'buy' }"
+            :class="{ 'is-active': series.id === optionsSeriesId && optionsAction.startsWith('buy') }"
             type="button"
             @click="selectOptionsSeries(series.id)"
           >
@@ -1475,11 +1617,11 @@ const selectOptionsTicket = (ticketId: string) => {
             </div>
             <div class="market-list__stats">
               <strong>{{ series.premium }}</strong>
-              <span>{{ series.ticketsIssued }} tickets</span>
+              <span>{{ series.openNotional }} open</span>
             </div>
           </button>
           <button
-            v-for="ticket in mode === 'Options' && optionsAction === 'exercise' ? liveOptionTickets : []"
+            v-for="ticket in mode === 'Options' && optionsAction.startsWith('exercise') ? liveOptionTickets : []"
             :key="ticket.id"
             class="market-list__item"
             :class="{ 'is-active': ticket.id === optionsTicketId }"
@@ -1491,8 +1633,8 @@ const selectOptionsTicket = (ticketId: string) => {
               <span class="market-list__route">{{ ticket.seriesId }}</span>
             </div>
             <div class="market-list__stats">
-              <strong>{{ ticket.contracts }} contracts</strong>
-              <span>{{ ticket.collateralReserved }} reserved</span>
+              <strong>{{ ticket.notional }} notional</strong>
+              <span>{{ ticket.collateralLocked }} locked</span>
             </div>
           </button>
         </div>
