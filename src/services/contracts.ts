@@ -5,6 +5,7 @@ import type {
   ContractStateResponse,
   ContractViewRequest,
   ContractViewResponse,
+  CoverManagerConfig,
   DlmmMirrorState,
   DlmmPoolConfig,
   FarmConfig
@@ -231,5 +232,50 @@ export const fetchFarmConfig = async (
     rewardAssetId,
     treasuryAccountId,
     rewardRate: asFiniteNumber('reward_rate', rewardRate)
+  };
+};
+
+export const fetchCoverManagerConfig = async (
+  baseUrl: string,
+  authority: string,
+  contractAddress: string,
+  gasLimit = 5000
+): Promise<CoverManagerConfig> => {
+  const response = await viewContract(baseUrl, {
+    authority,
+    contract_address: contractAddress,
+    entrypoint: 'manager_config',
+    gas_limit: gasLimit
+  });
+
+  if (!Array.isArray(response.result) || response.result.length < 9) {
+    throw new Error('Cover manager_config returned an unexpected tuple shape.');
+  }
+
+  const [
+    settlementAssetId,
+    riskVaultContractHex,
+    withdrawalOnly,
+    defaultRequiredObservations,
+    oracleStaleSlots,
+    observationJobId,
+    automationCadence,
+    automationBacklogCap,
+    automationSafeMode
+  ] = response.result;
+  if (typeof settlementAssetId !== 'string') {
+    throw new Error('Cover manager_config returned an unexpected settlement asset identifier.');
+  }
+
+  return {
+    settlementAssetId,
+    riskVaultContractHex: typeof riskVaultContractHex === 'string' ? riskVaultContractHex : null,
+    withdrawalOnly: asIntegerString('cover_withdrawal_only', withdrawalOnly) !== '0',
+    defaultRequiredObservations: asIntegerString('cover_default_required_observations', defaultRequiredObservations),
+    oracleStaleSlots: asIntegerString('cover_oracle_stale_slots', oracleStaleSlots),
+    observationJobId: asIntegerString('cover_observation_job_id', observationJobId),
+    automationCadence: asIntegerString('cover_automation_cadence', automationCadence),
+    automationBacklogCap: asIntegerString('cover_automation_backlog_cap', automationBacklogCap),
+    automationSafeMode: asIntegerString('cover_automation_safe_mode', automationSafeMode) !== '0'
   };
 };

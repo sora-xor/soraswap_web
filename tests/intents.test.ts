@@ -7,14 +7,9 @@ import {
 } from '@/services/intents';
 import { resolveContractAddressForRole } from '@/services/registry';
 
-const oraclePayload = {
-  perpsMarkPriceBps: '10000',
-  perpsIndexPriceBps: '10000',
-  perpsConfidenceBps: '0',
-  perpsOracleSlot: '42',
-  perpsCurrentSlot: '43',
-  perpsStatusFlags: '0',
-  perpsAttestationHash: '7'
+const signedOracle = {
+  perpsOraclePayload: '0x7b22646f6d61696e223a317d',
+  perpsOracleSignature: '0xabcdef12'
 };
 
 describe('intent builders', () => {
@@ -155,7 +150,7 @@ describe('intent builders', () => {
       perpsSize: '750',
       perpsMargin: '250',
       perpsLeverageBps: '10000',
-      ...oraclePayload,
+      ...signedOracle,
       optionsSeriesId: '1',
       optionsPositionId: '1',
       gate: 'gate'
@@ -188,7 +183,8 @@ describe('intent builders', () => {
       size: '-750',
       margin: '250',
       requested_leverage_bps: '10000',
-      oracle_payload: ['10000', '10000', '0', '42', '43', '0', '7']
+      oracle_payload: '0x7b22646f6d61696e223a317d',
+      oracle_signature: '0xabcdef12'
     });
     expect(optionsIntent.contractKey).toBe('options.factory');
     expect(optionsIntent.contractAddress).toBe(optionsContractAddress);
@@ -217,7 +213,7 @@ describe('intent builders', () => {
       perpsSize: '123456789012345678901234567890',
       perpsMargin: '250',
       perpsLeverageBps: '10000',
-      ...oraclePayload,
+      ...signedOracle,
       optionsSeriesId: '1',
       optionsPositionId: '1',
       gate: 'gate'
@@ -226,6 +222,61 @@ describe('intent builders', () => {
     expect(intent.payload).toMatchObject({
       size: '-123456789012345678901234567890',
       margin: '250'
+    });
+  });
+
+  test('buildSwapIntent sends signed shout oracle bytes when exercising', () => {
+    const intent = buildSwapIntent({
+      mode: 'Options',
+      authorityAccountId: 'i105authority',
+      dataspace: 'universal',
+      payToken: 'XOR',
+      receiveToken: 'USDT',
+      amountIn: '250',
+      slippage: '0',
+      perpsDirection: 'Long',
+      perpsPositionId: '1',
+      perpsSize: '750',
+      optionsAction: 'exerciseShout',
+      optionsSeriesId: '2',
+      optionsPositionId: '77',
+      optionsOraclePayload: '7B7D',
+      optionsOracleSignature: '0XABCD',
+      gate: 'gate'
+    });
+
+    expect(intent.entrypoint).toBe('exercise_shout_position');
+    expect(intent.payload).toEqual({
+      position_id: '77',
+      oracle_payload: '0x7b7d',
+      oracle_signature: '0xabcd'
+    });
+  });
+
+  test('buildDefiIntent maps cover register to current on-chain ABI fields', () => {
+    const intent = buildDefiIntent({
+      kind: 'cover_register',
+      authorityAccountId: 'i105authority',
+      dataspace: 'universal',
+      lowerBound: '9000',
+      upperBound: '11000',
+      payoutAmount: '1000000',
+      monitoringWindowSlots: '100',
+      requiredObservations: '3',
+      coveredNotional: '10000000',
+      premiumPaid: '0',
+      gate: 'gate'
+    });
+
+    expect(intent.entrypoint).toBe('register_policy');
+    expect(intent.payload).toEqual({
+      lower_bound: '9000',
+      upper_bound: '11000',
+      payout_amount: '1000000',
+      monitoring_window_slots: '100',
+      required_observations: '3',
+      covered_notional: '10000000',
+      premium_paid: '0'
     });
   });
 

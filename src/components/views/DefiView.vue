@@ -8,7 +8,7 @@ import {
   resolveTokenAssetMetadata,
   type AssetDefinitionMetadata
 } from '@/services/assets';
-import { fetchFarmConfig, prepareContractCallDraft } from '@/services/contracts';
+import { fetchCoverManagerConfig, fetchFarmConfig, prepareContractCallDraft } from '@/services/contracts';
 import { formatNumber } from '@/services/format';
 import { buildDefiIntent, type DefiOperationKind } from '@/services/intents';
 import {
@@ -75,8 +75,6 @@ const coverMonitoringWindowSlots = ref('100');
 const coverRequiredObservations = ref('3');
 const coverNotional = ref('1000');
 const coverPremiumPaid = ref('10');
-const coverRegistrationSlot = ref('0');
-const coverCurrentSlot = ref('0');
 const automationJob = ref('job-001');
 const automationPayloadHash = ref('1');
 const automationNextSlot = ref('0');
@@ -239,8 +237,6 @@ watch(
     coverRequiredObservations,
     coverNotional,
     coverPremiumPaid,
-    coverRegistrationSlot,
-    coverCurrentSlot,
     automationJob,
     automationPayloadHash,
     automationNextSlot,
@@ -567,25 +563,45 @@ const buildIntent = async () => {
       return intent;
     }
     case 'cover_register': {
+      if (!props.authorityAccountId) {
+        throw new Error('Choose an account before preparing a cover draft.');
+      }
+      const coverAddress = resolveContractAddressForRole('coverPolicyManager');
+      if (!coverAddress) {
+        throw new Error('No deployed cover policy manager address is configured yet. Sync the registry from a live deployment first.');
+      }
+      const config = await fetchCoverManagerConfig(props.toriiUrl, props.authorityAccountId, coverAddress);
+      const settlementMeta = await resolveAssetDefinitionMetadata(
+        props.toriiUrl,
+        config.settlementAssetId,
+        'Cover settlement asset'
+      );
+      const settlementScale = settlementMeta.scale ?? 0;
+      const settlementLabel = settlementMeta.alias || settlementMeta.name || config.settlementAssetId;
+      const payoutAmount = scaleDecimalToBaseUnits(coverPayoutAmount.value, settlementScale, 'Payout amount');
+      const coveredNotional = scaleDecimalToBaseUnits(coverNotional.value, settlementScale, 'Covered notional');
+      const premiumPaid = scaleDecimalToBaseUnits(coverPremiumPaid.value, settlementScale, 'Premium paid', {
+        allowZero: true
+      });
       const intent = buildDefiIntent({
         kind: 'cover_register',
         authorityAccountId,
         dataspace: props.dataspace,
         lowerBound: coverLowerBound.value,
         upperBound: coverUpperBound.value,
-        payoutAmount: coverPayoutAmount.value,
+        payoutAmount,
         monitoringWindowSlots: coverMonitoringWindowSlots.value,
         requiredObservations: coverRequiredObservations.value,
-        coveredNotional: coverNotional.value,
-        premiumPaid: coverPremiumPaid.value,
-        registrationSlot: coverRegistrationSlot.value,
+        coveredNotional,
+        premiumPaid,
         gate: props.writeGateReason
       });
       reviewItems.value = [
         { label: 'Bounds', value: `${coverLowerBound.value} - ${coverUpperBound.value}` },
-        { label: 'Payout', value: coverPayoutAmount.value },
-        { label: 'Covered notional', value: coverNotional.value },
-        { label: 'Premium paid', value: coverPremiumPaid.value }
+        { label: 'Settlement asset', value: settlementLabel },
+        { label: 'Payout', value: `${coverPayoutAmount.value} -> ${payoutAmount}` },
+        { label: 'Covered notional', value: `${coverNotional.value} -> ${coveredNotional}` },
+        { label: 'Premium paid', value: `${coverPremiumPaid.value} -> ${premiumPaid}` }
       ];
       intentJson.value = JSON.stringify(intent.payload, null, 2);
       return intent;
@@ -618,12 +634,11 @@ const buildIntent = async () => {
         authorityAccountId,
         dataspace: props.dataspace,
         policyId: selectedCoverPolicy.value.id,
-        currentSlot: coverCurrentSlot.value || String(currentSlot.value ?? 0),
         gate: props.writeGateReason
       });
       reviewItems.value = [
         { label: 'Policy', value: selectedCoverPolicy.value.id },
-        { label: 'Current slot', value: coverCurrentSlot.value || String(currentSlot.value ?? 0) }
+        { label: 'Expiry slot source', value: 'block_height()' }
       ];
       intentJson.value = JSON.stringify(intent.payload, null, 2);
       return intent;
@@ -1010,7 +1025,7 @@ const selectAutomationJob = (jobId: string) => {
               </label>
               <label class="field">
                 <span>Payout amount</span>
-                <input v-model="coverPayoutAmount" class="input mono" inputmode="numeric" />
+                <input v-model="coverPayoutAmount" class="input" inputmode="decimal" />
               </label>
               <label class="field">
                 <span>Window slots</span>
@@ -1028,14 +1043,6 @@ const selectAutomationJob = (jobId: string) => {
             <label v-if="operation === 'cover_register'" class="field">
               <span>Premium paid</span>
               <input v-model="coverPremiumPaid" class="input" inputmode="decimal" />
-            </label>
-            <label v-if="operation === 'cover_register'" class="field">
-              <span>Registration slot</span>
-              <input v-model="coverRegistrationSlot" class="input mono" inputmode="numeric" />
-            </label>
-            <label v-if="operation === 'cover_expire'" class="field">
-              <span>Current slot</span>
-              <input v-model="coverCurrentSlot" class="input mono" inputmode="numeric" />
             </label>
           </template>
 

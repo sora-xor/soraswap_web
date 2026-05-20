@@ -124,24 +124,16 @@ const perpsMarketId = ref('1');
 const perpsPositionId = ref('');
 const perpsSize = ref('300');
 const perpsLeverageBps = ref('10000');
-const perpsMarkPrice = ref('10000');
-const perpsIndexPrice = ref('10000');
-const perpsConfidenceBps = ref('0');
-const perpsOracleSlot = ref('0');
-const perpsCurrentSlot = ref('0');
-const perpsStatusFlags = ref('0');
-const perpsAttestationHash = ref('0');
+const perpsOraclePayload = ref('');
+const perpsOracleSignature = ref('');
 const perpsMaxPositions = ref('10');
 const optionsAction = ref<'buyShout' | 'buyOutperformance' | 'exerciseShout' | 'exerciseOutperformance'>('buyShout');
 const optionsSeriesId = ref('');
 const optionsTicketId = ref('');
 const optionsContracts = ref('1');
 const optionsPayout = ref('0');
-const optionsMarkPrice = ref('10000');
-const optionsOracleSlot = ref('0');
-const optionsCurrentSlot = ref('0');
-const optionsStatusFlags = ref('0');
-const optionsAttestationHash = ref('0');
+const optionsOraclePayload = ref('');
+const optionsOracleSignature = ref('');
 const pickerTarget = ref<PickerTarget>(null);
 const pickerSearch = ref('');
 const favoriteTokens = ref<TokenSymbol[]>(
@@ -341,24 +333,16 @@ watch(
     perpsPositionId,
     perpsSize,
     perpsLeverageBps,
-    perpsMarkPrice,
-    perpsIndexPrice,
-    perpsConfidenceBps,
-    perpsOracleSlot,
-    perpsCurrentSlot,
-    perpsStatusFlags,
-    perpsAttestationHash,
+    perpsOraclePayload,
+    perpsOracleSignature,
     perpsMaxPositions,
     optionsAction,
     optionsSeriesId,
     optionsTicketId,
     optionsContracts,
     optionsPayout,
-    optionsMarkPrice,
-    optionsOracleSlot,
-    optionsCurrentSlot,
-    optionsStatusFlags,
-    optionsAttestationHash,
+    optionsOraclePayload,
+    optionsOracleSignature,
     () => props.authorityAccountId
   ],
   () => {
@@ -595,16 +579,10 @@ watch(
 
 watch(
   [selectedPerpsPosition, perpsAction],
-  ([position, action]) => {
+  ([position]) => {
     if (!position) return;
     if (!perpsMarketId.value || perpsMarketId.value === '1') {
       perpsMarketId.value = position.marketId || perpsMarketId.value;
-    }
-    if ((action === 'close' || action === 'removeMargin' || action === 'liquidationPass') && !perpsMarkPrice.value) {
-      perpsMarkPrice.value = position.markPrice;
-    }
-    if (!perpsIndexPrice.value || perpsIndexPrice.value === '10000') {
-      perpsIndexPrice.value = position.indexPrice || perpsIndexPrice.value;
     }
   },
   { immediate: true }
@@ -781,16 +759,21 @@ const spotMinOutDisplay = computed(() => {
   if (receiveScale === null || spotMinOutBaseUnits.value === null) return '--';
   return `${formatTokenQuantity(spotMinOutBaseUnits.value, receiveScale, 6)} ${receiveToken.value}`;
 });
+const compactHexDisplay = (value: string) => {
+  const trimmed = value.trim();
+  if (!trimmed) return '--';
+  return trimmed.length > 24 ? `${trimmed.slice(0, 24)}...` : trimmed;
+};
 const tradeOutputLabel = computed(() => {
   switch (mode.value) {
     case 'Perps':
       return perpsAction.value === 'open' || perpsAction.value === 'modify'
         ? 'Position size'
         : perpsAction.value === 'close' || perpsAction.value === 'syncFunding' || perpsAction.value === 'liquidationPass'
-          ? 'Oracle mark'
+          ? 'Oracle payload'
           : 'Collateral delta';
     case 'Options':
-      return optionsAction.value.startsWith('buy') ? 'Notional' : 'Oracle mark';
+      return optionsAction.value.startsWith('buy') ? 'Notional' : 'Oracle payload';
     default:
       return 'Estimated receive';
   }
@@ -801,10 +784,10 @@ const tradeOutputValue = computed(() => {
       return perpsAction.value === 'open' || perpsAction.value === 'modify'
         ? perpsSize.value || '--'
         : perpsAction.value === 'close' || perpsAction.value === 'syncFunding' || perpsAction.value === 'liquidationPass'
-          ? perpsMarkPrice.value || '--'
+          ? compactHexDisplay(perpsOraclePayload.value)
           : amountIn.value || '--';
     case 'Options':
-      return optionsAction.value.startsWith('buy') ? optionsContracts.value || '--' : optionsMarkPrice.value || '--';
+      return optionsAction.value.startsWith('buy') ? optionsContracts.value || '--' : compactHexDisplay(optionsOraclePayload.value);
     default:
       return estimatedOutDisplay.value;
   }
@@ -953,13 +936,8 @@ const buildIntentInput = () => ({
   perpsSize: perpsSize.value,
   perpsMargin: amountIn.value,
   perpsLeverageBps: perpsLeverageBps.value,
-  perpsMarkPriceBps: perpsMarkPrice.value,
-  perpsIndexPriceBps: perpsIndexPrice.value,
-  perpsConfidenceBps: perpsConfidenceBps.value,
-  perpsOracleSlot: perpsOracleSlot.value,
-  perpsCurrentSlot: perpsCurrentSlot.value,
-  perpsStatusFlags: perpsStatusFlags.value,
-  perpsAttestationHash: perpsAttestationHash.value,
+  perpsOraclePayload: perpsOraclePayload.value,
+  perpsOracleSignature: perpsOracleSignature.value,
   perpsMaxPositions: perpsMaxPositions.value,
   optionsAction: optionsAction.value,
   optionsSeriesId: optionsSeriesId.value,
@@ -967,11 +945,8 @@ const buildIntentInput = () => ({
   optionsNotional: optionsContracts.value,
   optionsPremiumPaid: amountIn.value,
   optionsCollateralLocked: optionsPayout.value,
-  optionsMarkPriceBps: optionsMarkPrice.value,
-  optionsOracleSlot: optionsOracleSlot.value,
-  optionsCurrentSlot: optionsCurrentSlot.value,
-  optionsStatusFlags: optionsStatusFlags.value,
-  optionsAttestationHash: optionsAttestationHash.value,
+  optionsOraclePayload: optionsOraclePayload.value,
+  optionsOracleSignature: optionsOracleSignature.value,
   gate: props.writeGateReason
 });
 
@@ -1379,38 +1354,13 @@ const selectOptionsTicket = (ticketId: string) => {
             </label>
 
             <label v-if="mode === 'Perps' && perpsAction !== 'addMargin'" class="field">
-              <span>Oracle mark bps</span>
-              <input v-model="perpsMarkPrice" class="input mono" inputmode="numeric" />
+              <span>Oracle payload</span>
+              <input v-model="perpsOraclePayload" class="input mono" inputmode="text" placeholder="0x7b..." />
             </label>
 
             <label v-if="mode === 'Perps' && perpsAction !== 'addMargin'" class="field">
-              <span>Oracle index bps</span>
-              <input v-model="perpsIndexPrice" class="input mono" inputmode="numeric" />
-            </label>
-
-            <label v-if="mode === 'Perps' && perpsAction !== 'addMargin'" class="field">
-              <span>Confidence bps</span>
-              <input v-model="perpsConfidenceBps" class="input mono" inputmode="numeric" />
-            </label>
-
-            <label v-if="mode === 'Perps' && perpsAction !== 'addMargin'" class="field">
-              <span>Oracle slot</span>
-              <input v-model="perpsOracleSlot" class="input mono" inputmode="numeric" />
-            </label>
-
-            <label v-if="mode === 'Perps' && perpsAction !== 'addMargin'" class="field">
-              <span>Current slot</span>
-              <input v-model="perpsCurrentSlot" class="input mono" inputmode="numeric" />
-            </label>
-
-            <label v-if="mode === 'Perps' && perpsAction !== 'addMargin'" class="field">
-              <span>Status flags</span>
-              <input v-model="perpsStatusFlags" class="input mono" inputmode="numeric" />
-            </label>
-
-            <label v-if="mode === 'Perps' && perpsAction !== 'addMargin'" class="field">
-              <span>Attestation hash</span>
-              <input v-model="perpsAttestationHash" class="input mono" inputmode="numeric" />
+              <span>Oracle signature</span>
+              <input v-model="perpsOracleSignature" class="input mono" inputmode="text" placeholder="0x..." />
             </label>
 
             <div v-if="mode === 'Options'" class="field">
@@ -1472,28 +1422,13 @@ const selectOptionsTicket = (ticketId: string) => {
             </label>
 
             <label v-if="mode === 'Options' && optionsAction === 'exerciseShout'" class="field">
-              <span>Oracle mark bps</span>
-              <input v-model="optionsMarkPrice" class="input mono" inputmode="numeric" />
+              <span>Oracle payload</span>
+              <input v-model="optionsOraclePayload" class="input mono" inputmode="text" placeholder="0x7b..." />
             </label>
 
             <label v-if="mode === 'Options' && optionsAction === 'exerciseShout'" class="field">
-              <span>Oracle slot</span>
-              <input v-model="optionsOracleSlot" class="input mono" inputmode="numeric" />
-            </label>
-
-            <label v-if="mode === 'Options' && optionsAction === 'exerciseShout'" class="field">
-              <span>Current slot</span>
-              <input v-model="optionsCurrentSlot" class="input mono" inputmode="numeric" />
-            </label>
-
-            <label v-if="mode === 'Options' && optionsAction === 'exerciseShout'" class="field">
-              <span>Status flags</span>
-              <input v-model="optionsStatusFlags" class="input mono" inputmode="numeric" />
-            </label>
-
-            <label v-if="mode === 'Options' && optionsAction === 'exerciseShout'" class="field">
-              <span>Attestation hash</span>
-              <input v-model="optionsAttestationHash" class="input mono" inputmode="numeric" />
+              <span>Oracle signature</span>
+              <input v-model="optionsOracleSignature" class="input mono" inputmode="text" placeholder="0x..." />
             </label>
           </div>
         </div>

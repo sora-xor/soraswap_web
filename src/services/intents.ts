@@ -31,13 +31,8 @@ export interface SwapIntentInput extends SharedIntentInput {
   perpsSize: string;
   perpsMargin?: string;
   perpsLeverageBps?: string;
-  perpsMarkPriceBps?: string;
-  perpsIndexPriceBps?: string;
-  perpsConfidenceBps?: string;
-  perpsOracleSlot?: string;
-  perpsCurrentSlot?: string;
-  perpsStatusFlags?: string;
-  perpsAttestationHash?: string;
+  perpsOraclePayload?: string;
+  perpsOracleSignature?: string;
   perpsMaxPositions?: string;
   optionsAction?: 'buyShout' | 'buyOutperformance' | 'exerciseShout' | 'exerciseOutperformance';
   optionsSeriesId: string;
@@ -45,11 +40,8 @@ export interface SwapIntentInput extends SharedIntentInput {
   optionsNotional?: string;
   optionsPremiumPaid?: string;
   optionsCollateralLocked?: string;
-  optionsMarkPriceBps?: string;
-  optionsOracleSlot?: string;
-  optionsCurrentSlot?: string;
-  optionsStatusFlags?: string;
-  optionsAttestationHash?: string;
+  optionsOraclePayload?: string;
+  optionsOracleSignature?: string;
 }
 
 export interface LaunchpadCreateIntentInput extends SharedIntentInput {
@@ -139,7 +131,6 @@ export type DefiIntentInput =
       requiredObservations: string;
       coveredNotional: string;
       premiumPaid: string;
-      registrationSlot: string;
     } & SharedIntentInput)
   | ({
       kind: 'cover_claim';
@@ -150,7 +141,6 @@ export type DefiIntentInput =
       kind: 'cover_expire';
       authorityAccountId: string;
       policyId: string;
-      currentSlot: string;
     } & SharedIntentInput)
   | ({
       kind: 'automation_enqueue';
@@ -235,38 +225,23 @@ const requireNonNegativeIntegerString = (label: string, value: string) => {
   return normalized;
 };
 
-const requireOraclePayload = (
-  prefix: string,
-  input: {
-    markPriceBps?: string;
-    indexPriceBps?: string;
-    confidenceBps?: string;
-    oracleSlot?: string;
-    currentSlot?: string;
-    statusFlags?: string;
-    attestationHash?: string;
-  }
-) => [
-  requirePositiveIntegerString(`${prefix} mark price bps`, input.markPriceBps || ''),
-  requirePositiveIntegerString(`${prefix} index price bps`, input.indexPriceBps || ''),
-  requireNonNegativeIntegerString(`${prefix} confidence bps`, input.confidenceBps || '0'),
-  requireNonNegativeIntegerString(`${prefix} oracle slot`, input.oracleSlot || ''),
-  requireNonNegativeIntegerString(`${prefix} current slot`, input.currentSlot || ''),
-  requireNonNegativeIntegerString(`${prefix} status flags`, input.statusFlags || '0'),
-  requireNonNegativeIntegerString(`${prefix} attestation hash`, input.attestationHash || '')
-];
+const HEX_BYTES_PATTERN = /^(?:0[xX])?[0-9a-fA-F]+$/;
 
-const requireOptionsOracleFields = (
-  input: Pick<
-    SwapIntentInput,
-    'optionsMarkPriceBps' | 'optionsOracleSlot' | 'optionsCurrentSlot' | 'optionsStatusFlags' | 'optionsAttestationHash'
-  >
-) => ({
-  mark_price_bps: requirePositiveIntegerString('Options mark price bps', input.optionsMarkPriceBps || ''),
-  oracle_slot: requireNonNegativeIntegerString('Options oracle slot', input.optionsOracleSlot || ''),
-  current_slot: requireNonNegativeIntegerString('Options current slot', input.optionsCurrentSlot || ''),
-  status_flags: requireNonNegativeIntegerString('Options status flags', input.optionsStatusFlags || '0'),
-  attestation_hash: requireNonNegativeIntegerString('Options attestation hash', input.optionsAttestationHash || '')
+const requireHexBytes = (label: string, value: string) => {
+  const raw = requireNonEmptyString(label, value);
+  if (!HEX_BYTES_PATTERN.test(raw)) {
+    throw new Error(`${label} must be hex bytes.`);
+  }
+  const hex = raw.startsWith('0x') || raw.startsWith('0X') ? raw.slice(2) : raw;
+  if (hex.length === 0 || hex.length % 2 !== 0) {
+    throw new Error(`${label} must contain an even number of hex digits.`);
+  }
+  return `0x${hex.toLowerCase()}`;
+};
+
+const requireSignedOracleFields = (prefix: string, payload?: string, signature?: string) => ({
+  oracle_payload: requireHexBytes(`${prefix} payload`, payload || ''),
+  oracle_signature: requireHexBytes(`${prefix} signature`, signature || '')
 });
 
 export const buildSwapIntent = (input: SwapIntentInput): ContractIntentSpec => {
@@ -289,16 +264,8 @@ export const buildSwapIntent = (input: SwapIntentInput): ContractIntentSpec => {
     case 'Perps': {
       const { contractKey, contractAddress } = resolveContractBinding(ROLE_BY_CONTRACT_KEY.perpsEngine);
       const action = input.perpsAction || 'open';
-      const oraclePayload = () =>
-        requireOraclePayload('Perps oracle', {
-          markPriceBps: input.perpsMarkPriceBps,
-          indexPriceBps: input.perpsIndexPriceBps,
-          confidenceBps: input.perpsConfidenceBps,
-          oracleSlot: input.perpsOracleSlot,
-          currentSlot: input.perpsCurrentSlot,
-          statusFlags: input.perpsStatusFlags,
-          attestationHash: input.perpsAttestationHash
-        });
+      const signedOracle = () =>
+        requireSignedOracleFields('Perps oracle', input.perpsOraclePayload, input.perpsOracleSignature);
       const positionId = () => requirePositiveIntegerString('Position id', input.perpsPositionId);
       const marketId = () => requirePositiveIntegerString('Market id', input.perpsMarketId || '');
       return {
@@ -327,7 +294,7 @@ export const buildSwapIntent = (input: SwapIntentInput): ContractIntentSpec => {
                   : requirePositiveIntegerString('Size delta', input.perpsSize),
                 margin_delta: requireIntegerString('Margin delta', input.perpsMargin || input.amountIn),
                 requested_leverage_bps: requirePositiveIntegerString('Requested leverage bps', input.perpsLeverageBps || ''),
-                oracle_payload: oraclePayload()
+                ...signedOracle()
               }
             : action === 'addMargin'
               ? {
@@ -338,23 +305,23 @@ export const buildSwapIntent = (input: SwapIntentInput): ContractIntentSpec => {
                 ? {
                     position_id: positionId(),
                     amount: requirePositiveIntegerString('Margin amount', input.perpsMargin || input.amountIn),
-                    oracle_payload: oraclePayload()
+                    ...signedOracle()
                   }
                 : action === 'close'
                   ? {
                       position_id: positionId(),
-                      oracle_payload: oraclePayload()
+                      ...signedOracle()
                     }
                   : action === 'syncFunding'
                     ? {
                         market_id: marketId(),
-                        oracle_payload: oraclePayload()
+                        ...signedOracle()
                       }
                     : action === 'liquidationPass'
                       ? {
                           market_id: marketId(),
                           max_positions: requirePositiveIntegerString('Max positions', input.perpsMaxPositions || ''),
-                          oracle_payload: oraclePayload()
+                          ...signedOracle()
                         }
                       : (() => {
                           const size = requirePositiveIntegerString('Position size', input.perpsSize);
@@ -364,7 +331,7 @@ export const buildSwapIntent = (input: SwapIntentInput): ContractIntentSpec => {
                             size: signedSize,
                             margin: requirePositiveIntegerString('Margin', input.perpsMargin || input.amountIn),
                             requested_leverage_bps: requirePositiveIntegerString('Requested leverage bps', input.perpsLeverageBps || ''),
-                            oracle_payload: oraclePayload()
+                            ...signedOracle()
                           };
                         })()
       };
@@ -387,7 +354,7 @@ export const buildSwapIntent = (input: SwapIntentInput): ContractIntentSpec => {
           action === 'exerciseShout'
             ? {
                 position_id: requirePositiveIntegerString('Position id', input.optionsPositionId),
-                ...requireOptionsOracleFields(input)
+                ...requireSignedOracleFields('Options oracle', input.optionsOraclePayload, input.optionsOracleSignature)
               }
             : action === 'exerciseOutperformance'
               ? {
@@ -551,8 +518,7 @@ export const buildDefiIntent = (input: DefiIntentInput): ContractIntentSpec => {
           monitoring_window_slots: requirePositiveIntegerString('Monitoring window slots', input.monitoringWindowSlots),
           required_observations: requirePositiveIntegerString('Required observations', input.requiredObservations),
           covered_notional: requirePositiveIntegerString('Covered notional', input.coveredNotional),
-          premium_paid: requirePositiveIntegerString('Premium paid', input.premiumPaid),
-          registration_slot: requireNonNegativeIntegerString('Registration slot', input.registrationSlot)
+          premium_paid: requireNonNegativeIntegerString('Premium paid', input.premiumPaid)
         }
       };
     }
@@ -574,8 +540,7 @@ export const buildDefiIntent = (input: DefiIntentInput): ContractIntentSpec => {
         contractAddress,
         entrypoint: 'expire_policy',
         payload: {
-          policy_id: requirePositiveIntegerString('Policy id', input.policyId),
-          current_slot: requireNonNegativeIntegerString('Current slot', input.currentSlot)
+          policy_id: requirePositiveIntegerString('Policy id', input.policyId)
         }
       };
     }

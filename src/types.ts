@@ -667,6 +667,18 @@ export interface FarmConfig {
   rewardRate: number;
 }
 
+export interface CoverManagerConfig {
+  settlementAssetId: string;
+  riskVaultContractHex: string | null;
+  withdrawalOnly: boolean;
+  defaultRequiredObservations: string;
+  oracleStaleSlots: string;
+  observationJobId: string;
+  automationCadence: string;
+  automationBacklogCap: string;
+  automationSafeMode: boolean;
+}
+
 export interface LiveLaunchpadSale {
   id: string;
   saleAssetId: string;

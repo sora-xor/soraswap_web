@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, test, vi } from 'vitest';
-import { fetchDlmmPoolConfig, fetchFarmConfig, prepareContractCallDraft } from '@/services/contracts';
+import {
+  fetchCoverManagerConfig,
+  fetchDlmmPoolConfig,
+  fetchFarmConfig,
+  prepareContractCallDraft
+} from '@/services/contracts';
 
 const originalFetch = globalThis.fetch;
 const ZERO_PARAMETER_ENTRYPOINT_ERROR_HEX =
@@ -94,6 +99,41 @@ describe('contract call fetch helpers', () => {
       rewardAssetId: 'reward-id',
       treasuryAccountId: 'i105treasury',
       rewardRate: 25
+    });
+  });
+
+  test('fetchCoverManagerConfig decodes the manager_config tuple into named fields', async () => {
+    globalThis.fetch = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          ok: true,
+          dataspace: 'universal',
+          contract_id: 'cover',
+          contract_address: 'cover',
+          code_hash_hex: 'hash',
+          abi_hash_hex: 'abi',
+          entrypoint: 'manager_config',
+          result: ['usdt-id', '0x7269736b', 0, 3, 12, 44, 10, 25, 1]
+        }),
+        {
+          status: 200,
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        }
+      )
+    );
+
+    await expect(fetchCoverManagerConfig('https://taira.sora.org', 'authority', 'cover')).resolves.toEqual({
+      settlementAssetId: 'usdt-id',
+      riskVaultContractHex: '0x7269736b',
+      withdrawalOnly: false,
+      defaultRequiredObservations: '3',
+      oracleStaleSlots: '12',
+      observationJobId: '44',
+      automationCadence: '10',
+      automationBacklogCap: '25',
+      automationSafeMode: true
     });
   });
 });
