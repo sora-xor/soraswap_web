@@ -21,7 +21,6 @@ export const generatedSoraswapRegistry: SoraswapContractRegistry = {
         "mark_done",
         "complete_run",
         "retry",
-        "retry_at",
         "pause_job",
         "resume_job",
         "cancel_job",

@@ -576,7 +576,10 @@ const buildIntent = async () => {
         config.settlementAssetId,
         'Cover settlement asset'
       );
-      const settlementScale = settlementMeta.scale ?? 0;
+      if (settlementMeta.scale === null) {
+        throw new Error('The live cover settlement asset metadata does not expose a numeric scale yet.');
+      }
+      const settlementScale = settlementMeta.scale;
       const settlementLabel = settlementMeta.alias || settlementMeta.name || config.settlementAssetId;
       const payoutAmount = scaleDecimalToBaseUnits(coverPayoutAmount.value, settlementScale, 'Payout amount');
       const coveredNotional = scaleDecimalToBaseUnits(coverNotional.value, settlementScale, 'Covered notional');
@@ -692,40 +695,26 @@ const buildIntent = async () => {
       return intent;
     }
     case 'automation_resume': {
-      if (currentSlot.value === null) {
-        throw new Error('The current chain slot is not readable from this endpoint yet.');
-      }
       const intent = buildDefiIntent({
         kind: 'automation_resume',
         authorityAccountId,
         dataspace: props.dataspace,
         job: automationJob.value,
-        currentSlot: String(currentSlot.value),
         gate: props.writeGateReason
       });
-      reviewItems.value = [
-        { label: 'Job', value: automationJob.value },
-        { label: 'Current slot', value: String(currentSlot.value) }
-      ];
+      reviewItems.value = [{ label: 'Job', value: automationJob.value }];
       intentJson.value = JSON.stringify(intent.payload, null, 2);
       return intent;
     }
     case 'automation_retry': {
-      if (currentSlot.value === null) {
-        throw new Error('The current chain slot is not readable from this endpoint yet.');
-      }
       const intent = buildDefiIntent({
         kind: 'automation_retry',
         authorityAccountId,
         dataspace: props.dataspace,
         job: automationJob.value,
-        currentSlot: String(currentSlot.value),
         gate: props.writeGateReason
       });
-      reviewItems.value = [
-        { label: 'Job', value: automationJob.value },
-        { label: 'Current slot', value: String(currentSlot.value) }
-      ];
+      reviewItems.value = [{ label: 'Job', value: automationJob.value }];
       intentJson.value = JSON.stringify(intent.payload, null, 2);
       return intent;
     }

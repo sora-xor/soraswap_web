@@ -185,7 +185,14 @@ export const summarizeBurnProof = (proof: SccpBurnProofResponse) => {
 };
 
 export const summarizeGovernanceProof = (proof: SccpGovernanceProofResponse) => {
-  const validation = validateSccpGovernanceBundleSurface(proof);
+  if (!proof.commitment.parliament_certificate_hash) {
+    throw new Error('Governance proof is missing a parliament certificate hash.');
+  }
+  const validation = validateSccpGovernanceBundleSurface(
+    proof as SccpGovernanceProofResponse & {
+      commitment: SccpGovernanceProofResponse['commitment'] & { parliament_certificate_hash: string };
+    }
+  );
   return {
     validation,
     targetDomainLabel: bridgeDomainLabel(Number(proof.commitment.target_domain)),

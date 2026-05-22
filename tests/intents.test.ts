@@ -8,8 +8,17 @@ import {
 import { resolveContractAddressForRole } from '@/services/registry';
 
 const signedOracle = {
-  perpsOraclePayload: '0x7b22646f6d61696e223a317d',
-  perpsOracleSignature: '0xabcdef12'
+  perpsOracleAttestation: {
+    oraclePayload: '0x7b22646f6d61696e223a317d',
+    oracleSignature: '0xabcdef12'
+  }
+};
+
+const signedOptionsOracle = {
+  optionsOracleAttestation: {
+    oraclePayload: '7B7D',
+    oracleSignature: '0XABCD'
+  }
 };
 
 describe('intent builders', () => {
@@ -240,8 +249,7 @@ describe('intent builders', () => {
       optionsAction: 'exerciseShout',
       optionsSeriesId: '2',
       optionsPositionId: '77',
-      optionsOraclePayload: '7B7D',
-      optionsOracleSignature: '0XABCD',
+      ...signedOptionsOracle,
       gate: 'gate'
     });
 

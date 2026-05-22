@@ -13,6 +13,11 @@ interface SharedIntentInput {
   dataspace?: string;
 }
 
+export interface SignedOracleAttestationInput {
+  oraclePayload: string;
+  oracleSignature: string;
+}
+
 export interface SwapIntentInput extends SharedIntentInput {
   mode: TradeMode;
   authorityAccountId: string;
@@ -31,8 +36,7 @@ export interface SwapIntentInput extends SharedIntentInput {
   perpsSize: string;
   perpsMargin?: string;
   perpsLeverageBps?: string;
-  perpsOraclePayload?: string;
-  perpsOracleSignature?: string;
+  perpsOracleAttestation?: SignedOracleAttestationInput;
   perpsMaxPositions?: string;
   optionsAction?: 'buyShout' | 'buyOutperformance' | 'exerciseShout' | 'exerciseOutperformance';
   optionsSeriesId: string;
@@ -40,8 +44,7 @@ export interface SwapIntentInput extends SharedIntentInput {
   optionsNotional?: string;
   optionsPremiumPaid?: string;
   optionsCollateralLocked?: string;
-  optionsOraclePayload?: string;
-  optionsOracleSignature?: string;
+  optionsOracleAttestation?: SignedOracleAttestationInput;
 }
 
 export interface LaunchpadCreateIntentInput extends SharedIntentInput {
@@ -65,7 +68,6 @@ export interface LaunchpadContributeIntentInput extends SharedIntentInput {
 export interface LaunchpadClaimIntentInput extends SharedIntentInput {
   authorityAccountId: string;
   allocationId: string;
-  currentSlot: string;
 }
 
 export interface LaunchpadRefundIntentInput extends SharedIntentInput {
@@ -165,13 +167,11 @@ export type DefiIntentInput =
       kind: 'automation_resume';
       authorityAccountId: string;
       job: string;
-      currentSlot: string;
     } & SharedIntentInput)
   | ({
       kind: 'automation_retry';
       authorityAccountId: string;
       job: string;
-      currentSlot: string;
     } & SharedIntentInput)
   | ({
       kind: 'automation_cancel';
@@ -239,9 +239,9 @@ const requireHexBytes = (label: string, value: string) => {
   return `0x${hex.toLowerCase()}`;
 };
 
-const requireSignedOracleFields = (prefix: string, payload?: string, signature?: string) => ({
-  oracle_payload: requireHexBytes(`${prefix} payload`, payload || ''),
-  oracle_signature: requireHexBytes(`${prefix} signature`, signature || '')
+const requireSignedOracleFields = (prefix: string, attestation?: SignedOracleAttestationInput) => ({
+  oracle_payload: requireHexBytes(`${prefix} payload`, attestation?.oraclePayload || ''),
+  oracle_signature: requireHexBytes(`${prefix} signature`, attestation?.oracleSignature || '')
 });
 
 export const buildSwapIntent = (input: SwapIntentInput): ContractIntentSpec => {
@@ -264,8 +264,7 @@ export const buildSwapIntent = (input: SwapIntentInput): ContractIntentSpec => {
     case 'Perps': {
       const { contractKey, contractAddress } = resolveContractBinding(ROLE_BY_CONTRACT_KEY.perpsEngine);
       const action = input.perpsAction || 'open';
-      const signedOracle = () =>
-        requireSignedOracleFields('Perps oracle', input.perpsOraclePayload, input.perpsOracleSignature);
+      const signedOracle = () => requireSignedOracleFields('Perps oracle', input.perpsOracleAttestation);
       const positionId = () => requirePositiveIntegerString('Position id', input.perpsPositionId);
       const marketId = () => requirePositiveIntegerString('Market id', input.perpsMarketId || '');
       return {
@@ -354,7 +353,7 @@ export const buildSwapIntent = (input: SwapIntentInput): ContractIntentSpec => {
           action === 'exerciseShout'
             ? {
                 position_id: requirePositiveIntegerString('Position id', input.optionsPositionId),
-                ...requireSignedOracleFields('Options oracle', input.optionsOraclePayload, input.optionsOracleSignature)
+                ...requireSignedOracleFields('Options oracle', input.optionsOracleAttestation)
               }
             : action === 'exerciseOutperformance'
               ? {
@@ -413,8 +412,7 @@ export const buildLaunchpadClaimIntent = (input: LaunchpadClaimIntentInput): Con
     contractAddress,
     entrypoint: 'claim_allocation',
     payload: {
-      allocation: requireNonEmptyString('Allocation id', input.allocationId),
-      current_slot: requireNonNegativeIntegerString('Current slot', input.currentSlot)
+      allocation: requireNonEmptyString('Allocation id', input.allocationId)
     }
   };
 };
@@ -588,8 +586,7 @@ export const buildDefiIntent = (input: DefiIntentInput): ContractIntentSpec => {
         contractAddress,
         entrypoint: 'resume_job',
         payload: {
-          job: requireNonEmptyString('Job id', input.job),
-          current_slot: requireNonNegativeIntegerString('Current slot', input.currentSlot)
+          job: requireNonEmptyString('Job id', input.job)
         }
       };
     }
@@ -598,10 +595,9 @@ export const buildDefiIntent = (input: DefiIntentInput): ContractIntentSpec => {
       return {
         contractKey,
         contractAddress,
-        entrypoint: 'retry_at',
+        entrypoint: 'retry',
         payload: {
-          job: requireNonEmptyString('Job id', input.job),
-          current_slot: requireNonNegativeIntegerString('Current slot', input.currentSlot)
+          job: requireNonEmptyString('Job id', input.job)
         }
       };
     }

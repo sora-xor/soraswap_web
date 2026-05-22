@@ -454,20 +454,15 @@ const buildDetailIntent = async () => {
       if (!selectedAllocation.value) {
         throw new Error('No allocation was found for this sale on the selected account.');
       }
-      if (currentSlot.value === null) {
-        throw new Error('The current chain slot is not readable from this endpoint yet.');
-      }
       const intent = buildLaunchpadClaimIntent({
         authorityAccountId: props.authorityAccountId,
         allocationId: selectedAllocation.value.id,
-        currentSlot: String(currentSlot.value),
         dataspace: props.dataspace,
         gate: props.writeGateReason
       });
       reviewItems.value = [
         { label: 'Allocation', value: selectedAllocation.value.id },
-        { label: 'Claimable sale amount', value: formatAssetQuantity(selectedAllocation.value.saleAmount, sale.saleAssetId) },
-        { label: 'Current slot', value: String(currentSlot.value) }
+        { label: 'Claimable sale amount', value: formatAssetQuantity(selectedAllocation.value.saleAmount, sale.saleAssetId) }
       ];
       createIntent.value = JSON.stringify(intent.payload, null, 2);
       return intent;

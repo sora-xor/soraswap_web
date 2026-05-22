@@ -24,6 +24,10 @@ import {
   loadPerpsPositions
 } from '@/services/liveSoraswap';
 import { resolveContractAddressForRole } from '@/services/registry';
+import {
+  fetchLatestSoraSwapOracleAttestation,
+  type SoraSwapOracleAttestation
+} from '@/services/soracles';
 import type {
   AccountAssetItem,
   ContractCallDraftRequest,
@@ -124,16 +128,13 @@ const perpsMarketId = ref('1');
 const perpsPositionId = ref('');
 const perpsSize = ref('300');
 const perpsLeverageBps = ref('10000');
-const perpsOraclePayload = ref('');
-const perpsOracleSignature = ref('');
 const perpsMaxPositions = ref('10');
 const optionsAction = ref<'buyShout' | 'buyOutperformance' | 'exerciseShout' | 'exerciseOutperformance'>('buyShout');
 const optionsSeriesId = ref('');
 const optionsTicketId = ref('');
 const optionsContracts = ref('1');
 const optionsPayout = ref('0');
-const optionsOraclePayload = ref('');
-const optionsOracleSignature = ref('');
+const resolvedOracleAttestation = ref<SoraSwapOracleAttestation | null>(null);
 const pickerTarget = ref<PickerTarget>(null);
 const pickerSearch = ref('');
 const favoriteTokens = ref<TokenSymbol[]>(
@@ -304,6 +305,7 @@ const resetExecutionState = (clearIntent = false) => {
   submitResponseJson.value = '';
   submitPipelineJson.value = '';
   submitPipelineNote.value = '';
+  resolvedOracleAttestation.value = null;
   if (clearIntent) {
     intentJson.value = '';
   }
@@ -333,16 +335,12 @@ watch(
     perpsPositionId,
     perpsSize,
     perpsLeverageBps,
-    perpsOraclePayload,
-    perpsOracleSignature,
     perpsMaxPositions,
     optionsAction,
     optionsSeriesId,
     optionsTicketId,
     optionsContracts,
     optionsPayout,
-    optionsOraclePayload,
-    optionsOracleSignature,
     () => props.authorityAccountId
   ],
   () => {
@@ -759,21 +757,21 @@ const spotMinOutDisplay = computed(() => {
   if (receiveScale === null || spotMinOutBaseUnits.value === null) return '--';
   return `${formatTokenQuantity(spotMinOutBaseUnits.value, receiveScale, 6)} ${receiveToken.value}`;
 });
-const compactHexDisplay = (value: string) => {
-  const trimmed = value.trim();
-  if (!trimmed) return '--';
-  return trimmed.length > 24 ? `${trimmed.slice(0, 24)}...` : trimmed;
-};
+const oracleAttestationLabel = computed(() => {
+  const attestation = resolvedOracleAttestation.value;
+  if (!attestation) return 'Fetched on prepare';
+  return `slot ${attestation.oracleSlot} / ${attestation.attestationHash}`;
+});
 const tradeOutputLabel = computed(() => {
   switch (mode.value) {
     case 'Perps':
       return perpsAction.value === 'open' || perpsAction.value === 'modify'
         ? 'Position size'
         : perpsAction.value === 'close' || perpsAction.value === 'syncFunding' || perpsAction.value === 'liquidationPass'
-          ? 'Oracle payload'
+          ? 'Soracles attestation'
           : 'Collateral delta';
     case 'Options':
-      return optionsAction.value.startsWith('buy') ? 'Notional' : 'Oracle payload';
+      return optionsAction.value.startsWith('buy') ? 'Notional' : 'Soracles attestation';
     default:
       return 'Estimated receive';
   }
@@ -784,10 +782,10 @@ const tradeOutputValue = computed(() => {
       return perpsAction.value === 'open' || perpsAction.value === 'modify'
         ? perpsSize.value || '--'
         : perpsAction.value === 'close' || perpsAction.value === 'syncFunding' || perpsAction.value === 'liquidationPass'
-          ? compactHexDisplay(perpsOraclePayload.value)
+          ? oracleAttestationLabel.value
           : amountIn.value || '--';
     case 'Options':
-      return optionsAction.value.startsWith('buy') ? optionsContracts.value || '--' : compactHexDisplay(optionsOraclePayload.value);
+      return optionsAction.value.startsWith('buy') ? optionsContracts.value || '--' : oracleAttestationLabel.value;
     default:
       return estimatedOutDisplay.value;
   }
@@ -872,6 +870,27 @@ const tradeInspectorSummary = computed(() => [
 ]);
 const tradeInspectorEntries = computed(() => [
   { label: 'Intent payload', value: intentJson.value },
+  {
+    label: 'Soracles attestation',
+    value: resolvedOracleAttestation.value
+      ? JSON.stringify(
+          {
+            domain: resolvedOracleAttestation.value.domain,
+            subjectId: resolvedOracleAttestation.value.subjectId,
+            oracleSlot: resolvedOracleAttestation.value.oracleSlot,
+            statusFlags: resolvedOracleAttestation.value.statusFlags,
+            attestationHash: resolvedOracleAttestation.value.attestationHash,
+            feeds: resolvedOracleAttestation.value.sourceEvents.map((source) => ({
+              feedId: source.feedId,
+              slot: source.slot,
+              field: source.field
+            }))
+          },
+          null,
+          2
+        )
+      : ''
+  },
   { label: 'Prepared trade', value: draftResponseJson.value },
   { label: 'Submitted response', value: submitResponseJson.value },
   { label: 'Pipeline status', value: submitPipelineJson.value }
@@ -936,8 +955,6 @@ const buildIntentInput = () => ({
   perpsSize: perpsSize.value,
   perpsMargin: amountIn.value,
   perpsLeverageBps: perpsLeverageBps.value,
-  perpsOraclePayload: perpsOraclePayload.value,
-  perpsOracleSignature: perpsOracleSignature.value,
   perpsMaxPositions: perpsMaxPositions.value,
   optionsAction: optionsAction.value,
   optionsSeriesId: optionsSeriesId.value,
@@ -945,10 +962,27 @@ const buildIntentInput = () => ({
   optionsNotional: optionsContracts.value,
   optionsPremiumPaid: amountIn.value,
   optionsCollateralLocked: optionsPayout.value,
-  optionsOraclePayload: optionsOraclePayload.value,
-  optionsOracleSignature: optionsOracleSignature.value,
   gate: props.writeGateReason
 });
+
+const resolveSoraSwapOracleAttestationForIntent = async () => {
+  if (mode.value === 'Perps' && perpsAction.value !== 'addMargin') {
+    const subjectId = perpsMarketId.value.trim();
+    if (!subjectId) throw new Error('Choose a Perps market before resolving a Soracles attestation.');
+    const attestation = await fetchLatestSoraSwapOracleAttestation(props.toriiUrl, 'perps_market', subjectId);
+    resolvedOracleAttestation.value = attestation;
+    return { perpsOracleAttestation: { oraclePayload: attestation.oraclePayload, oracleSignature: attestation.oracleSignature } };
+  }
+  if (mode.value === 'Options' && optionsAction.value === 'exerciseShout') {
+    const subjectId = optionsTicketId.value.trim();
+    if (!subjectId) throw new Error('Choose an options position before resolving a Soracles attestation.');
+    const attestation = await fetchLatestSoraSwapOracleAttestation(props.toriiUrl, 'options_shout', subjectId);
+    resolvedOracleAttestation.value = attestation;
+    return { optionsOracleAttestation: { oraclePayload: attestation.oraclePayload, oracleSignature: attestation.oracleSignature } };
+  }
+  resolvedOracleAttestation.value = null;
+  return {};
+};
 
 const buildIntent = async () => {
   const intentInput = buildIntentInput();
@@ -986,6 +1020,10 @@ const buildIntent = async () => {
         };
       }
     }
+    scaledIntentInput = {
+      ...scaledIntentInput,
+      ...(await resolveSoraSwapOracleAttestationForIntent())
+    };
     const intent = buildSwapIntent(scaledIntentInput);
     intentJson.value = JSON.stringify(intent.payload, null, 2);
     return intent;
@@ -1353,15 +1391,10 @@ const selectOptionsTicket = (ticketId: string) => {
               <input v-model="perpsMaxPositions" class="input mono" inputmode="numeric" />
             </label>
 
-            <label v-if="mode === 'Perps' && perpsAction !== 'addMargin'" class="field">
-              <span>Oracle payload</span>
-              <input v-model="perpsOraclePayload" class="input mono" inputmode="text" placeholder="0x7b..." />
-            </label>
-
-            <label v-if="mode === 'Perps' && perpsAction !== 'addMargin'" class="field">
-              <span>Oracle signature</span>
-              <input v-model="perpsOracleSignature" class="input mono" inputmode="text" placeholder="0x..." />
-            </label>
+            <div v-if="mode === 'Perps' && perpsAction !== 'addMargin'" class="field">
+              <span>Soracles attestation</span>
+              <input :value="oracleAttestationLabel" class="input mono" readonly />
+            </div>
 
             <div v-if="mode === 'Options'" class="field">
               <span>Action</span>
@@ -1421,15 +1454,10 @@ const selectOptionsTicket = (ticketId: string) => {
               <input v-model="optionsPayout" class="input" inputmode="decimal" />
             </label>
 
-            <label v-if="mode === 'Options' && optionsAction === 'exerciseShout'" class="field">
-              <span>Oracle payload</span>
-              <input v-model="optionsOraclePayload" class="input mono" inputmode="text" placeholder="0x7b..." />
-            </label>
-
-            <label v-if="mode === 'Options' && optionsAction === 'exerciseShout'" class="field">
-              <span>Oracle signature</span>
-              <input v-model="optionsOracleSignature" class="input mono" inputmode="text" placeholder="0x..." />
-            </label>
+            <div v-if="mode === 'Options' && optionsAction === 'exerciseShout'" class="field">
+              <span>Soracles attestation</span>
+              <input :value="oracleAttestationLabel" class="input mono" readonly />
+            </div>
           </div>
         </div>
 
